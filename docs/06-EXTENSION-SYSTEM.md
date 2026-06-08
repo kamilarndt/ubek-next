@@ -82,14 +82,18 @@ export const socialMediaTool = {
 
 ```typescript
 // Auto-import wszystkich tool.ts z extensionów
-// Next.js Webpack/Vite kompiluje wszystko w buildzie
-// Pi Agent ładuje przez dynamic import przy starcie
+// Pi Agent ładuje przez dynamic import przy starcie ze współdzielonego katalogu extensions/
+// Każdy tool.ts eksportuje nazwany export (np. socialMediaTool)
+
+import { socialMediaTool } from './social-media/tool';
+import { webSearchTool } from './core/web-search/tool';
+import { visionTool } from './core/vision/tool';
+import { docGenTool } from './core/document-gen/tool';
 
 export const coreTools = [
-  require('./core/vision/tool').default,
-  require('./core/web-search/tool').default,
-  require('./core/document-gen/tool').default,
-  require('./core/memory/tool').default,
+  webSearchTool,
+  visionTool,
+  docGenTool,
 ];
 ```
 

@@ -52,6 +52,19 @@ jako gotowe implementacje Default Tools lub rozszerzeń.
 - **Użycie**: npm install
 - **Faza 2**: automatyczne nazwy konwersacji (zamiast "Chat #1")
 
+## Biblioteki do implementacji (nie z pi.dev)
+
+### Document Generation (wszystkie Phase 1)
+
+| Pakiet | Zastosowanie | Effort |
+|--------|-------------|--------|
+| `pdfkit` | Generowanie PDF z tabelami, kodem, nagłówkami | 2 dni |
+| `docx` (npm) | Generowanie DOCX (Office Open XML) | 1 dzień |
+| `exceljs` | Generowanie XLSX z arkuszami i formatowaniem | 1 dzień |
+| `marked` lub `remark` | Markdown → HTML (zamiast ręcznego regex) | 1 dzień |
+
+Razem: ~5 dni na solidny DocumentService z 4 formatami + testy.
+
 ## Instalacja
 
 ```bash
@@ -62,13 +75,13 @@ npm install pi-web-access pi-ocr pi-hermes-memory pi-mcp-adapter pi-subagents pi
 
 Następnie w `extensions/_registry.ts`:
 ```typescript
-import { webSearch, webFetch } from 'pi-web-access';
-import { ocrAnalyze } from 'pi-ocr';
+import { webSearchTool, webFetchTool } from 'pi-web-access';
+import { ocrTool } from 'pi-ocr';
 
 export const piDevTools = [
-  { name: 'web_search', ...webSearch },
-  { name: 'web_fetch', ...webFetch },
-  { name: 'vision_ocr', ...ocrAnalyze },
+  webSearchTool,
+  webFetchTool,
+  ocrTool,
 ];
 ```
 

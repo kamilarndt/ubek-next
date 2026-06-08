@@ -23,11 +23,11 @@
 - [ ] Logout: usuwa JWT → redirect
 
 ### Vault
-- [ ] Lista plików: paginacja, sortowanie
+- [ ] Lista plików
 - [ ] Upload: drag & drop, file picker
 - [ ] Upload: limit rozmiaru (100MB)
 - [ ] Preview: PDF, obraz, tekst
-- [ ] Foldery: tworzenie, nawigacja
+- [ ] Foldery: tworzenie, nawigacja, przenoszenie plików
 
 ### Sidebar
 - [ ] Sidebar pokazuje: Nowa rozmowa, Chat, Vault, Settings

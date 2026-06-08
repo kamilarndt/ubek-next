@@ -29,12 +29,16 @@ Phase 1: max 20 użytkowników. Agent działa na bazie Pi Coding Agent SDK, fron
 |----|---------|------|
 | F-01 | Chat streaming | rozmowa z agentem przez SSE / AI SDK Stream Protocol |
 | F-02 | Auth | JWT (httpOnly cookie) — sign-up, sign-in, logout, middleware |
-| F-03 | System prompt | SKILL.md per tenant, UBEK_SYSTEM jako fallback |
+| F-03 | System prompt | SKILL.md per tenant + per project instructions |
 | F-04 | PL/EN | agent odpowiada w języku użytkownika |
 | F-05 | Guardrails | InjectionDetector, RateLimiter, AuditLogger |
 | F-06 | Frontend UI | AI Elements: Conversation, Message, PromptInput |
-| F-07 | Vault | upload plików, lista, preview (bez folderów i paginacji w MVP) |
+| F-07 | Vault | upload plików, foldery, lista, preview |
 | F-08 | Default Tools | vision, web-search, document-gen, memory |
+| F-09 | Projects | projekty z custom instructions + KB + memory + extensions (jak Gems) |
+| F-10 | RAG / Knowledge Base | chunkowanie, embedowanie, semantic search, cytowanie źródeł |
+| F-11 | Deep Research | wieloetapowy research z planem, web search, raportem |
+| F-12 | Conversation history | lista poprzednich rozmów, resume per project |
 
 ### P1 — Next
 
@@ -72,8 +76,10 @@ Phase 1: max 20 użytkowników. Agent działa na bazie Pi Coding Agent SDK, fron
 
 | Tool | Opis | Źródło |
 |------|------|--------|
-| Vision | analiza obrazów, OCR, wykresy | pi-ocr lub własny |
-| Web Search | wyszukiwanie z cytowaniem | pi-web-access |
-| Document Gen | generowanie PDF/MD/DOCX | własny (reuse) |
+| Vision | analiza obrazów, OCR, wykresy | `pi-ocr` (3.1K/mo) |
+| Web Search | wyszukiwanie z cytowaniem | `pi-web-access` (90.8K/mo) |
+| Document Gen | Markdown, PDF (`pdfkit`), DOCX (`docx`), XLSX (`exceljs`) | własny (przepisany) |
 | Memory | zapamiętywanie faktów o userze | Memory API (:18766) |
-| File Upload | upload do Vault + analiza (część Vault API, nie osobny tool) | Vault API |
+| File Upload | upload do Vault + analiza (część Vault API) | Vault API |
+| RAG | semantic search po dokumentach projektu | RAGService.ts (reuse) |
+| Deep Research | wieloetapowy research z subagentami | własna implementacja |
