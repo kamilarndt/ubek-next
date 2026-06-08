@@ -1,0 +1,43 @@
+{
+  "name": "ubek-next-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "next": "^15",
+    "react": "^19",
+    "react-dom": "^19",
+    "ai": "^6",
+    "@ai-sdk/react": "^1",
+    "@ai-sdk/openai": "^2",
+    "zustand": "^5",
+    "zod": "^3",
+    "jsonwebtoken": "^9",
+    "pg": "^8",
+    "ioredis": "^5",
+    "bcryptjs": "^2",
+    "lucide-react": "^0",
+    "clsx": "^2",
+    "tailwind-merge": "^3",
+    "class-variance-authority": "^0.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/jsonwebtoken": "^9",
+    "@types/pg": "^8",
+    "typescript": "^5",
+    "tailwindcss": "^4",
+    "vitest": "^3",
+    "@playwright/test": "^1"
+  }
+}
