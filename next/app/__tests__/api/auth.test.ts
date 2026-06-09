@@ -304,6 +304,7 @@ describe('GET /api/auth/me', () => {
       id: user.id,
       email: user.email,
       displayName: user.name,
+      role: user.role,
     })
   })
 

@@ -43,12 +43,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch('/api/auth/me', { credentials: 'include' })
       if (res.ok) {
-        const data = (await res.json()) as { user: { id: string; email: string; displayName: string } }
+        const data = (await res.json()) as { user: { id: string; email: string; displayName: string; role: string } }
         setUser({
           id: data.user.id,
           email: data.user.email,
           name: data.user.displayName,
-          role: 'user',
+          role: data.user.role,
         })
       } else {
         setUser(null)
@@ -64,10 +64,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hydrate()
   }, [hydrate])
 
+  function getCsrfHeader(): Record<string, string> {
+    const match = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/)
+    return match ? { 'x-csrf-token': match[1] } : {}
+  }
+
   const login = useCallback(async (email: string, password: string) => {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getCsrfHeader() },
       credentials: 'include',
       body: JSON.stringify({ email, password }),
     })
@@ -81,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(async (email: string, password: string, displayName?: string) => {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getCsrfHeader() },
       credentials: 'include',
       body: JSON.stringify({ email, password, displayName }),
     })
@@ -93,12 +98,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [hydrate])
 
   const logout = useCallback(async () => {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-    })
-    setUser(null)
-    router.push('/auth/login')
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: getCsrfHeader(),
+        credentials: 'include',
+      })
+    } catch {
+    } finally {
+      setUser(null)
+      router.push('/auth/login')
+    }
   }, [router])
 
   // Redirect unauthenticated users away from protected routes

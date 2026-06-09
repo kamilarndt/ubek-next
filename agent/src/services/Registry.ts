@@ -1,5 +1,6 @@
-import * as fs from 'fs'
+import * as fs from 'fs/promises'
 import * as path from 'path'
+import { fileURLToPath } from 'url'
 import type { ToolDefinition } from '../types'
 
 interface RegistryOptions {
@@ -7,29 +8,51 @@ interface RegistryOptions {
 }
 
 export class ExtensionRegistry {
-  constructor(private options: RegistryOptions) {}
+  private resolvedBase: string
+
+  constructor(private options: RegistryOptions) {
+    this.resolvedBase = path.resolve(this.options.extensionsPath)
+  }
 
   async loadCoreTools(): Promise<ToolDefinition[]> {
-    const corePath = path.join(this.options.extensionsPath, 'core')
+    const corePath = path.join(this.resolvedBase, 'core')
 
-    if (!fs.existsSync(corePath)) {
+    let entries: fs.Dirent[]
+    try {
+      entries = await fs.readdir(corePath, { withFileTypes: true })
+    } catch {
       return []
     }
 
-    const entries = fs.readdirSync(corePath, { withFileTypes: true })
     const tools: ToolDefinition[] = []
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
 
-      const toolPath = path.join(corePath, entry.name, 'tool.ts')
-      if (!fs.existsSync(toolPath)) continue
+      const toolPath = path.resolve(corePath, entry.name, 'tool.ts')
 
-      const mod = await import(toolPath) as {
+      if (!toolPath.startsWith(this.resolvedBase)) {
+        continue
+      }
+
+      let stat: fs.Stats | null = null
+      try {
+        stat = await fs.stat(toolPath)
+      } catch {
+        continue
+      }
+      if (!stat.isFile()) continue
+
+      let mod: {
         name?: string
         description?: string
         schema?: { parse: (data: unknown) => unknown }
         execute?: (params: unknown) => Promise<{ content: { type: string; text: string }[] }>
+      }
+      try {
+        mod = await import(toolPath)
+      } catch {
+        continue
       }
 
       const schema = mod.schema
@@ -45,10 +68,8 @@ export class ExtensionRegistry {
               type: 'string',
               description: zodField._def?.description || key,
             }
-            if (key === 'query' || key === 'action' || key === 'title' || key === 'content') {
-              required.push(key)
-            }
           }
+          required.push(...Object.keys(shape))
         }
       }
 

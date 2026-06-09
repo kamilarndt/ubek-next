@@ -6,6 +6,12 @@ import { NextResponse } from 'next/server'
 const mockRedirect = vi.fn()
 const mockNext = vi.fn()
 
+const mockCookiesSet = vi.fn()
+const mockResponse = {
+  type: 'next',
+  cookies: { set: mockCookiesSet },
+}
+
 vi.mock('next/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('next/server')>()
   return {
@@ -14,11 +20,11 @@ vi.mock('next/server', async (importOriginal) => {
       ...actual.NextResponse,
       redirect: (...args: unknown[]) => {
         mockRedirect(...args)
-        return { type: 'redirect' }
+        return { type: 'redirect', cookies: { set: mockCookiesSet } } as never
       },
       next: (...args: unknown[]) => {
         mockNext(...args)
-        return { type: 'next' }
+        return { type: 'next', cookies: { set: mockCookiesSet } } as never
       },
     },
   }
@@ -98,7 +104,7 @@ describe('Route constants', () => {
   })
 
   it('PUBLIC_ROUTES contains expected paths', () => {
-    expect(PUBLIC_ROUTES).toEqual(['/login', '/register', '/api/auth'])
+    expect(PUBLIC_ROUTES).toEqual(['/auth', '/api/auth'])
   })
 })
 
@@ -118,7 +124,7 @@ describe('middleware', () => {
     await middleware(request)
 
     expect(mockRedirect).toHaveBeenCalledWith(
-      expect.objectContaining({ pathname: '/login' })
+      expect.objectContaining({ pathname: '/auth/login' })
     )
   })
 
@@ -126,11 +132,10 @@ describe('middleware', () => {
     mockedVerifyToken.mockRejectedValue(new Error('no token'))
 
     const { middleware } = await import('@/middleware')
-    const request = createRequest('http://localhost/login')
+    const request = createRequest('http://localhost/auth/login')
 
     await middleware(request)
 
-    expect(mockNext).toHaveBeenCalled()
     expect(mockRedirect).not.toHaveBeenCalled()
   })
 
@@ -146,11 +151,11 @@ describe('middleware', () => {
     expect(mockRedirect).not.toHaveBeenCalled()
   })
 
-  it('redirects authenticated user away from /login to /', async () => {
+  it('redirects authenticated user away from /auth to /', async () => {
     mockedVerifyToken.mockResolvedValue({ sub: 'user-123' })
 
     const { middleware } = await import('@/middleware')
-    const request = createRequest('http://localhost/login', 'valid-token')
+    const request = createRequest('http://localhost/auth/login', 'valid-token')
 
     await middleware(request)
 

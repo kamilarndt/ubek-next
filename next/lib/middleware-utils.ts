@@ -24,4 +24,4 @@ export async function checkAuth(request: NextRequest): Promise<AuthCheckResult> 
 }
 
 export const PROTECTED_ROUTES = ['/', '/api/chat', '/api/projects', '/api/vault']
-export const PUBLIC_ROUTES = ['/login', '/register', '/api/auth']
+export const PUBLIC_ROUTES = ['/auth', '/api/auth']

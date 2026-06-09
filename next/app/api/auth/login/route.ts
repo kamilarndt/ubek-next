@@ -15,13 +15,13 @@ export async function POST(req: Request) {
 
     const db = getDb()
     const found = await db.select().from(users).where(eq(users.email, email))
-    if (!found || found.length === 0) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
-    }
+    const user = found?.[0]
 
-    const user = found[0]
-    const valid = await comparePassword(password, user.passwordHash)
-    if (!valid) {
+    const valid = await comparePassword(
+      password,
+      user?.passwordHash || '$2a$10$0000000000000000000000000000000000000000000',
+    )
+    if (!user || !valid) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       process.env.JWT_SECRET || 'secret'
     )
 
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     cookieStore.set('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

@@ -27,9 +27,14 @@ export async function createApp(): Promise<express.Application> {
   // Protected routes
   app.use('/api', authMiddleware, chatRouter)
 
-  setInterval(() => {
-    pool.cleanup(30 * 60 * 1000).catch(console.error)
+  const cleanupTimer = setInterval(() => {
+    pool.cleanup(30 * 60 * 1000).catch(() => {})
   }, 5 * 60 * 1000)
+
+  process.on('SIGTERM', () => {
+    clearInterval(cleanupTimer)
+    pool.releaseAll?.()
+  })
 
   return app
 }
