@@ -1,3 +1,23 @@
+> **UPDATE 2026-06-09:** Większość krytycznych issue naprawionych:
+> - ✅ SdkSseAdapter: wszystkie 5 eventów działa (start, text-end, reasoning-end, [DONE], error)
+> - ✅ Security: CSRF, AGENT_API_KEY, bind 127.0.0.1, XSS (dompurify)
+> - ✅ DB Schema: wszystkie indeksy dodane
+> - ✅ Frontend: transport skonfigurowany poprawnie
+> - ✅ Module-level throw w auth.ts usunięty (build blocker)
+> - ✅ Extension API ownership check dodany
+> - ✅ Vault path traversal guards dodane
+> - ✅ SessionPool: LRU + maxSize
+> - ✅ Dynamic import .js fallback
+> - ✅ N+1 query fixed
+> - ✅ Middleware CSRF exclusion
+> - ✅ Vault file cleanup na DB error
+> - ✅ Form name attributes, API validation
+> - ✅ Agent dotenv auto-load
+>
+> Szczegóły: git log --oneline -10
+> Aktualny commit: 8e9f76c
+> Testy: 210/210 pass
+
 # UBEK Next — Issues otwarte & decyzje do podjęcia
 
 Ostatnia aktualizacja: 2026-06-09 (po review — uproszczenie Phase 1)
