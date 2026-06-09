@@ -14,46 +14,20 @@ export const schema = z.object({
 
 export type Params = z.infer<typeof schema>
 
-const NEXTJS_URL = process.env.NEXTJS_URL || 'http://localhost:3000'
+import { userFactStore } from '@/lib/store'
 
+// In-memory cache per user
 const memoryStores = new Map<string, Map<string, string>>()
 const loadedUsers = new Set<string>()
 
-async function getUserFactsApi(userId: string): Promise<{ key: string; value: string }[]> {
-  try {
-    const res = await fetch(`${NEXTJS_URL}/api/user-facts?userId=${encodeURIComponent(userId)}`, {
-      headers: { 'Content-Type': 'application/json' },
-    })
-    if (!res.ok) return []
-    return await res.json()
-  } catch {
-    return []
+async function loadUserFacts(userId: string): Promise<void> {
+  const facts = await userFactStore.findByUserId(userId)
+  const store = memoryStores.get(userId)!
+  for (const fact of facts) {
+    // value stored as JSONB, stringify for consistency
+    store.set(fact.key, JSON.stringify(fact.value))
   }
-}
-
-async function storeUserFactApi(userId: string, key: string, value: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${NEXTJS_URL}/api/user-facts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, key, value }),
-    })
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
-async function deleteUserFactApi(userId: string, key: string): Promise<boolean> {
-  try {
-    const res = await fetch(
-      `${NEXTJS_URL}/api/user-facts?userId=${encodeURIComponent(userId)}&key=${encodeURIComponent(key)}`,
-      { method: 'DELETE' },
-    )
-    return res.ok
-  } catch {
-    return false
-  }
+  loadedUsers.add(userId)
 }
 
 async function getStore(userId: string): Promise<Map<string, string>> {
@@ -61,16 +35,26 @@ async function getStore(userId: string): Promise<Map<string, string>> {
     memoryStores.set(userId, new Map())
   }
   const store = memoryStores.get(userId)!
-
   if (!loadedUsers.has(userId)) {
-    const facts = await getUserFactsApi(userId)
-    for (const fact of facts) {
-      store.set(fact.key, fact.value)
-    }
-    loadedUsers.add(userId)
+    await loadUserFacts(userId)
   }
-
   return store
+}
+
+async function persistFact(userId: string, key: string, value: string): Promise<void> {
+  // Upsert logic: try to find existing, delete then insert
+  const existing = await userFactStore.findByKey(userId, key)
+  if (existing) {
+    await userFactStore.delete(existing.id)
+  }
+  await userFactStore.create({ userId, key, value })
+}
+
+async function deleteFact(userId: string, key: string): Promise<void> {
+  const existing = await userFactStore.findByKey(userId, key)
+  if (existing) {
+    await userFactStore.delete(existing.id)
+  }
 }
 
 export async function execute(
@@ -88,7 +72,7 @@ export async function execute(
         return { content: [{ type: 'text', text: 'Error: value is required for store action.' }] }
       }
       store.set(key, value)
-      await storeUserFactApi(userId, key, value)
+      await persistFact(userId, key, value)
       return { content: [{ type: 'text', text: `Stored memory: "${key}"` }] }
     }
 
@@ -112,7 +96,7 @@ export async function execute(
       const existed = store.has(key)
       store.delete(key)
       if (existed) {
-        await deleteUserFactApi(userId, key)
+        await deleteFact(userId, key)
       }
       return {
         content: [{ type: 'text', text: existed ? `Deleted memory: "${key}"` : `No memory found for key: "${key}"` }],
