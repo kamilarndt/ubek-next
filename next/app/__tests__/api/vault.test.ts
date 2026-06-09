@@ -20,6 +20,7 @@ vi.mock('@/lib/store', () => ({
     findByUserId: vi.fn(),
     findById: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
   },
 }))
 
@@ -124,14 +125,14 @@ describe('Vault API', () => {
         get: vi.fn().mockReturnValue(null),
       } as any)
 
-      const response = await GET_FILE({ params: { id: mockFile.id } } as any)
+      const response = await GET_FILE(new Request('http://localhost'), { params: Promise.resolve({ id: mockFile.id }) })
       expect(response.status).toBe(401)
     })
 
     it('should return 404 if file not found', async () => {
       vi.mocked(vaultStore.findById).mockResolvedValue(null)
 
-      const response = await GET_FILE({ params: { id: mockFile.id } } as any)
+      const response = await GET_FILE(new Request('http://localhost'), { params: Promise.resolve({ id: mockFile.id }) })
       expect(response.status).toBe(404)
     })
 
@@ -139,14 +140,14 @@ describe('Vault API', () => {
       const otherUsersFile = { ...mockFile, userId: 'other-user-id' }
       vi.mocked(vaultStore.findById).mockResolvedValue(otherUsersFile)
 
-      const response = await GET_FILE({ params: { id: mockFile.id } } as any)
+      const response = await GET_FILE(new Request('http://localhost'), { params: Promise.resolve({ id: mockFile.id }) })
       expect(response.status).toBe(403)
     })
 
     it('should return file stream for valid request', async () => {
       vi.mocked(vaultStore.findById).mockResolvedValue(mockFile)
 
-      const response = await GET_FILE({ params: { id: mockFile.id } } as any)
+      const response = await GET_FILE(new Request('http://localhost'), { params: Promise.resolve({ id: mockFile.id }) })
       expect(response.status).toBe(200)
       // File stream response would be tested here
     })
@@ -158,14 +159,14 @@ describe('Vault API', () => {
         get: vi.fn().mockReturnValue(null),
       } as any)
 
-      const response = await DELETE({ params: { id: mockFile.id } } as any)
+      const response = await DELETE(new Request('http://localhost'), { params: Promise.resolve({ id: mockFile.id }) })
       expect(response.status).toBe(401)
     })
 
     it('should return 404 if file not found', async () => {
       vi.mocked(vaultStore.findById).mockResolvedValue(null)
 
-      const response = await DELETE({ params: { id: mockFile.id } } as any)
+      const response = await DELETE(new Request('http://localhost'), { params: Promise.resolve({ id: mockFile.id }) })
       expect(response.status).toBe(404)
     })
 
@@ -173,7 +174,7 @@ describe('Vault API', () => {
       const otherUsersFile = { ...mockFile, userId: 'other-user-id' }
       vi.mocked(vaultStore.findById).mockResolvedValue(otherUsersFile)
 
-      const response = await DELETE({ params: { id: mockFile.id } } as any)
+      const response = await DELETE(new Request('http://localhost'), { params: Promise.resolve({ id: mockFile.id }) })
       expect(response.status).toBe(403)
     })
 
@@ -182,7 +183,7 @@ describe('Vault API', () => {
       const deletedFile = { ...mockFile, deletedAt: expect.any(Date) }
       vi.mocked(vaultStore.findById).mockResolvedValue(fileToDelete)
 
-      const response = await DELETE({ params: { id: mockFile.id } } as any)
+      const response = await DELETE(new Request('http://localhost'), { params: Promise.resolve({ id: mockFile.id }) })
       expect(response.status).toBe(200)
       const data = await response.json()
       expect(data.success).toBe(true)

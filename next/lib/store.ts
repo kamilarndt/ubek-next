@@ -51,6 +51,15 @@ export const projectStore = {
     }).returning()
     return result[0]
   },
+
+  async update(id: string, data: { name?: string; instructions?: string }) {
+    const result = await db.update(projects).set(data).where(eq(projects.id, id)).returning()
+    return result[0] || null
+  },
+
+  async delete(id: string) {
+    await db.delete(projects).where(eq(projects.id, id))
+  },
 }
 
 export const sessionStore = {
@@ -80,6 +89,10 @@ export const sessionStore = {
 }
 
 export const vaultStore = {
+  async update(id: string, data: Record<string, unknown>) {
+    const result = await db.update(vaultFiles).set(data).where(eq(vaultFiles.id, id)).returning()
+    return result[0] || null
+  },
   async findById(id: string) {
     const result = await db.select().from(vaultFiles).where(eq(vaultFiles.id, id)).limit(1)
     return result[0] || null

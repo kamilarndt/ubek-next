@@ -13,25 +13,41 @@ async function getUserId() {
   return payload.sub
 }
 
-export async function GET({ params }: { params: { id: string } }) {
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const file = await vaultStore.findById(params.id)
+
+  const file = await vaultStore.findById(id)
   if (!file) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (file.userId !== userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const uploadDir = process.env.UPLOAD_DIR || './uploads'
   const filePath = path.join(uploadDir, file.filename)
-  const stream = fs.createReadStream(filePath)
-  return new NextResponse(stream, { status: 200 })
+  const buffer = fs.readFileSync(filePath)
+  return new NextResponse(buffer, {
+    status: 200,
+    headers: {
+      'Content-Type': file.mimeType || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${file.originalName}"`,
+    },
+  })
 }
 
-export async function DELETE({ params }: { params: { id: string } }) {
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
   const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const file = await vaultStore.findById(params.id)
-  if (!file) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const file = await vaultStore.findById(id)
+  if (!file) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
   if (file.userId !== userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  // soft delete by setting deletedAt
-  await vaultStore.update && vaultStore.update(params.id, { deletedAt: new Date() })
-  return NextResponse.json({ success: true }, { status: 200 })
+
+  await vaultStore.update(id, { deletedAt: new Date() })
+  return NextResponse.json({ success: true })
 }
