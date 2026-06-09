@@ -2,6 +2,7 @@ export interface Config {
   port: number
   agentApiKey: string
   jwtSecret: string
+  extensionsPath: string
   router: {
     url: string
     apiKey: string

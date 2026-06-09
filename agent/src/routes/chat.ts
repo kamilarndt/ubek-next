@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from 'express'
 import { SdkSseAdapter } from '../services/SdkSseAdapter'
 import { UserSessionPool } from '../services/SessionPool'
+import { ExtensionRegistry } from '../services/Registry'
+import { callRouterLLM, parseSSEChunk, executeToolCalls } from '../services/chat-service'
 import type { Config } from '../types'
 
 function validateMessage(value: unknown): string {
@@ -33,6 +35,83 @@ function checkRateLimit(userId: string, maxPerMinute = 30): void {
     throw new Error('Rate limit exceeded. Try again later.')
   }
   entry.count++
+}
+
+async function doStreamingCall(
+  config: Config,
+  messages: Array<{ role: string; content: string }>,
+  registry: ExtensionRegistry,
+  write: (chunk: string) => void,
+): Promise<void> {
+  const tools = await registry.loadCoreTools()
+  const { stream } = await callRouterLLM(config, messages as any, tools)
+
+  if (!stream) {
+    write(JSON.stringify({ type: 'error', data: { message: 'No response stream' } }))
+    return
+  }
+
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let collectedText = ''
+  let collectedToolCalls = new Map<string, { name: string; args: string }>()
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+    const chunk = lines.join('\n')
+
+    const { text, toolCalls } = parseSSEChunk(chunk)
+    if (text) {
+      collectedText += text
+    }
+    if (toolCalls.size > 0) {
+      collectedToolCalls = new Map([...collectedToolCalls, ...toolCalls])
+    }
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
+        write(trimmed + '\n\n')
+      }
+    }
+  }
+
+  if (collectedToolCalls.size > 0) {
+    const toolResults = await executeToolCalls(collectedToolCalls, registry)
+
+    const messagesWithTools = [
+      ...messages,
+      { role: 'assistant' as const, content: collectedText || null },
+      ...toolResults,
+    ]
+
+    const { stream: resultStream } = await callRouterLLM(config, messagesWithTools as any, tools)
+    if (!resultStream) return
+
+    const resultReader = resultStream.getReader()
+    const resultDecoder = new TextDecoder()
+    let resultBuffer = ''
+
+    while (true) {
+      const { done, value } = await resultReader.read()
+      if (done) break
+      resultBuffer += resultDecoder.decode(value, { stream: true })
+      const lines = resultBuffer.split('\n')
+      resultBuffer = lines.pop() || ''
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
+          write(trimmed + '\n\n')
+        }
+      }
+    }
+  }
 }
 
 export function createChatRouter(
@@ -77,79 +156,14 @@ export function createChatRouter(
         model: config.router.model,
       })
 
-      const routerUrl = config.router.url.replace(/\/+$/, '')
-      const routerResponse = await fetch(`${routerUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.router.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: config.router.model || 'auto',
-          messages: [{ role: 'user', content: message }],
-          stream: true,
-        }),
-      })
+      const registry = new ExtensionRegistry({ extensionsPath: config.extensionsPath || 'extensions' })
+      const messages = [{ role: 'user', content: message }]
 
-      if (!routerResponse.ok) {
-        adapter.handleEvent({
-          type: 'error',
-          data: { message: `Router LLM error: ${routerResponse.status}` },
-        })
-        adapter.handleEvent({ type: 'finish', data: { finish_reason: 'error' } })
-        return
-      }
-
-      const reader = routerResponse.body?.getReader()
-      if (!reader) {
-        adapter.handleEvent({ type: 'error', data: { message: 'No response body from Router LLM' } })
-        adapter.handleEvent({ type: 'finish', data: { finish_reason: 'error' } })
-        return
-      }
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let hasContent = false
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed || !trimmed.startsWith('data: ')) continue
-
-          const jsonData = trimmed.slice(6)
-          if (jsonData === '[DONE]') continue
-
-          try {
-            const parsed = JSON.parse(jsonData)
-            const text = parsed.choices?.[0]?.delta?.content || ''
-            if (text) {
-              hasContent = true
-              adapter.handleEvent({ type: 'text', data: { text } })
-            }
-          } catch {
-            // skip malformed JSON chunks
-          }
-        }
-      }
-
-      if (!hasContent) {
-        adapter.handleEvent({
-          type: 'text',
-          data: { text: 'I received your message but could not generate a response. Please try again.' },
-        })
-      }
-
+      adapter.handleEvent({ type: 'start', data: { chatId } })
+      await doStreamingCall(config, messages, registry, write)
       adapter.handleEvent({ type: 'finish', data: { finish_reason: 'stop' } })
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error'
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       adapter.handleEvent({ type: 'error', data: { message: errorMessage } })
     }
   })

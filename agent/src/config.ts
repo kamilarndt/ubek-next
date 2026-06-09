@@ -12,6 +12,7 @@ export function loadConfig(): Config {
     port: parseInt(process.env.PORT || '4000', 10),
     agentApiKey: process.env.AGENT_API_KEY!,
     jwtSecret: process.env.JWT_SECRET!,
+    extensionsPath: process.env.EXTENSIONS_PATH || './extensions',
     router: {
       url: process.env.ROUTER_URL!,
       apiKey: process.env.ROUTER_API_KEY!,
