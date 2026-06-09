@@ -16,7 +16,7 @@ export async function GET(
   const token = getTokenFromRequest(_req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, process.env.JWT_SECRET || 'secret')
+    const payload = await verifyToken(token, process.env.JWT_SECRET )
     const session = await sessionStore.findById(id)
     if (!session) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     if (session.userId !== payload.sub) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -34,7 +34,7 @@ export async function PATCH(
   const token = getTokenFromRequest(req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, process.env.JWT_SECRET || 'secret')
+    const payload = await verifyToken(token, process.env.JWT_SECRET )
     const existing = await sessionStore.findById(id)
     if (!existing) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     if (existing.userId !== payload.sub) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -54,7 +54,7 @@ export async function DELETE(
   const token = getTokenFromRequest(_req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, process.env.JWT_SECRET || 'secret')
+    const payload = await verifyToken(token, process.env.JWT_SECRET )
     const existing = await sessionStore.findById(id)
     if (!existing) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     if (existing.userId !== payload.sub) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

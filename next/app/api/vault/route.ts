@@ -27,7 +27,7 @@ async function getUserId() {
   const cookieStore = await cookies()
   const token = cookieStore.get('token')?.value
   if (!token) return null
-  const payload = await verifyToken(token, process.env.JWT_SECRET || 'secret')
+  const payload = await verifyToken(token, process.env.JWT_SECRET )
   return payload.sub
 }
 
@@ -70,7 +70,12 @@ export async function POST(request: any) {
   try {
     await fs.promises.mkdir(uploadDir, { recursive: true })
     const filename = `${crypto.randomUUID()}${path.extname(file.name)}`
-    const filePath = path.join(uploadDir, filename)
+    const resolvedPath = path.resolve(uploadDir, filename);
+    const allowedDir = path.resolve(uploadDir);
+    if (!resolvedPath.startsWith(allowedDir)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+    const filePath = resolvedPath
     const arrayBuffer = await file.arrayBuffer()
     await fs.promises.writeFile(filePath, Buffer.from(arrayBuffer))
     const record = await vaultStore.create({

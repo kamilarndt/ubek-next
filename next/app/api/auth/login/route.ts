@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 
     const token = await signToken(
       { sub: user.id, role: user.role },
-      process.env.JWT_SECRET || 'secret'
+      process.env.JWT_SECRET 
     )
 
     const cookieStore = await cookies()

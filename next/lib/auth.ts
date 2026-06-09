@@ -1,9 +1,7 @@
 import jwt, { type SignOptions } from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 
-if (!process.env.JWT_SECRET && process.env.NODE_ENV !== 'test') {
-  throw new Error('FATAL: JWT_SECRET environment variable is not configured!')
-}
+
 
 const SALT_ROUNDS = 10
 

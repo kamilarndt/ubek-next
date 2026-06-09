@@ -32,6 +32,17 @@ const CORE_EXTENSIONS = [
   },
 ];
 
+async function requireProjectOwnership(projectId: string): Promise<string | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
+  if (!token) return null;
+  const payload = await verifyToken(token, process.env.JWT_SECRET);
+  const userId = payload.sub;
+  const project = await projectStore.findById(projectId);
+  if (!project || project.userId !== userId) return null;
+  return userId;
+}
+
 async function ensureCoreExtensions() {
   try {
     const existing = await extensionStore.list();
@@ -73,14 +84,6 @@ export async function GET(request: Request) {
   return NextResponse.json(extensions);
 }
 
-// NOTE (auth surface): POST/DELETE assign paths (and GET ?projectId) do not perform
-// explicit verifyToken + user ownership check on projectId (contrast with /api/projects,
-// /api/chat/sessions). They rely on: (a) middleware protecting paths starting with '/'
-// (isProtected for non-/api/auth), (b) credentials:include sending the session cookie.
-// This matches the pre-existing pattern of /api/admin/extension-requests exactly.
-// Per vertical-slice rules, no verification/scope added here (would expand auth surface
-// and touch unrelated patterns). Any authed client can mutate assignments for any projectId.
-// TODO: later consider getUserIdFromCookie + project ownership guard + audit, or add
 // /api/extensions to explicit admin guard.
 
 export async function POST(req: Request) {
@@ -91,6 +94,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const { projectId, extensionId } = body || {};
+  const ownerUserId = await requireProjectOwnership(projectId);
+  if (!ownerUserId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (!projectId || !extensionId) {
     return NextResponse.json(
       { error: "projectId and extensionId required" },

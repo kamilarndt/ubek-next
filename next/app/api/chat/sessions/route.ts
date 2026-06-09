@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const token = getTokenFromRequest(req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, process.env.JWT_SECRET || 'secret')
+    const payload = await verifyToken(token, process.env.JWT_SECRET )
     const sessions = await sessionStore.findByUserId(payload.sub)
     return NextResponse.json(sessions)
   } catch {
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const token = getTokenFromRequest(req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, process.env.JWT_SECRET || 'secret')
+    const payload = await verifyToken(token, process.env.JWT_SECRET )
     const body = await req.json()
     const session = await sessionStore.create({
       id: randomUUID(),

@@ -18,7 +18,7 @@ export async function GET(
   const token = getTokenFromRequest(_req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, process.env.JWT_SECRET || 'secret')
+    const payload = await verifyToken(token, process.env.JWT_SECRET )
     const rows = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1)
     const session = rows[0]
     if (!session) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
@@ -37,7 +37,7 @@ export async function POST(
   const token = getTokenFromRequest(req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, process.env.JWT_SECRET || 'secret')
+    const payload = await verifyToken(token, process.env.JWT_SECRET )
     const rows = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1)
     const session = rows[0]
     if (!session) return NextResponse.json({ error: 'Not Found' }, { status: 404 })

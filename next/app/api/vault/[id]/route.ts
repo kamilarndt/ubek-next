@@ -9,7 +9,7 @@ async function getUserId() {
   const cookieStore = await cookies()
   const token = cookieStore.get('token')?.value
   if (!token) return null
-  const payload = await verifyToken(token, process.env.JWT_SECRET || 'secret')
+  const payload = await verifyToken(token, process.env.JWT_SECRET )
   return payload.sub
 }
 
@@ -25,7 +25,12 @@ export async function GET(
   if (!file) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (file.userId !== userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const uploadDir = process.env.UPLOAD_DIR || './uploads'
-  const filePath = path.join(uploadDir, file.filename)
+  const resolvedPath = path.resolve(uploadDir, file.filename);
+  const allowedDir = path.resolve(uploadDir);
+  if (!resolvedPath.startsWith(allowedDir)) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  }
+  const filePath = resolvedPath
   const buffer = fs.readFileSync(filePath)
   return new NextResponse(buffer, {
     status: 200,
