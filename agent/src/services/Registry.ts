@@ -25,17 +25,47 @@ export class ExtensionRegistry {
       const toolPath = path.join(corePath, entry.name, 'tool.ts')
       if (!fs.existsSync(toolPath)) continue
 
+      const mod = await import(toolPath) as {
+        name?: string
+        description?: string
+        schema?: { parse: (data: unknown) => unknown }
+        execute?: (params: unknown) => Promise<{ content: { type: string; text: string }[] }>
+      }
+
+      const schema = mod.schema
+      const properties: Record<string, unknown> = {}
+      const required: string[] = []
+
+      if (schema) {
+        const shape = (schema as unknown as { _def?: { shape?: Record<string, unknown> } })._def?.shape
+        if (shape) {
+          for (const [key, field] of Object.entries(shape)) {
+            const zodField = field as { _def?: { typeName?: string; description?: string } }
+            properties[key] = {
+              type: 'string',
+              description: zodField._def?.description || key,
+            }
+            if (key === 'query' || key === 'action' || key === 'title' || key === 'content') {
+              required.push(key)
+            }
+          }
+        }
+      }
+
       tools.push({
-        name: entry.name.replace(/-/g, '_'),
-        description: `Core tool: ${entry.name}`,
+        name: mod.name || entry.name.replace(/-/g, '_'),
+        description: mod.description || `Core tool: ${entry.name}`,
         parameters: {
           type: 'object',
-          properties: {},
-          required: [],
+          properties,
+          required,
         },
-        execute: async () => ({
-          content: [{ type: 'text', text: `${entry.name} tool executed` }],
-        }),
+        execute: async (params: unknown) => {
+          if (mod.execute) {
+            return mod.execute(params)
+          }
+          return { content: [{ type: 'text', text: `${entry.name} tool executed` }] }
+        },
       })
     }
 
