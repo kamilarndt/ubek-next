@@ -62,19 +62,19 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium">Name</label>
-              <Input id="name" type="text" required value={name} onChange={(e) => setName(e.target.value)} />
+              <Input id="name" name="name" type="text" required value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Email address</label>
-              <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Input id="email" name="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium">Password</label>
-              <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Input id="password" name="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <div className="space-y-2">
               <label htmlFor="confirmPassword" className="text-sm font-medium">Confirm Password</label>
-              <Input id="confirmPassword" type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+              <Input id="confirmPassword" name="confirmPassword" type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
             </div>
             <Button type="submit" className="w-full" disabled={submitting || authLoading}>
               {submitting ? 'Loading...' : 'Create Account'}

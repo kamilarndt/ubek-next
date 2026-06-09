@@ -78,15 +78,21 @@ export async function POST(request: any) {
     const filePath = resolvedPath
     const arrayBuffer = await file.arrayBuffer()
     await fs.promises.writeFile(filePath, Buffer.from(arrayBuffer))
-    const record = await vaultStore.create({
-      userId: userId as string,
-      filename,
-      originalName: file.name,
-      size: file.size,
-      mimeType: file.type,
-    })
-    return NextResponse.json({ file: record }, { status: 201 })
+    try {
+      const record = await vaultStore.create({
+        userId: userId as string,
+        filename,
+        originalName: file.name,
+        size: file.size,
+        mimeType: file.type,
+      })
+      return NextResponse.json({ file: record }, { status: 201 })
+    } catch (dbErr) {
+      // Clean up file if DB insert fails
+      try { await fs.promises.unlink(filePath); } catch { /* ignore cleanup errors */ }
+      return NextResponse.json({ error: "Upload failed: database error" }, { status: 500 })
+    }
   } catch (e) {
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+    return NextResponse.json({ error: "Upload failed" }, { status: 500 })
   }
 }

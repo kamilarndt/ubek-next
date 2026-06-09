@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { type Config } from './types'
 
 export function loadConfig(): Config {
