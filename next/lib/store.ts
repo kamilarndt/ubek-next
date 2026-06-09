@@ -77,17 +77,18 @@ export const sessionStore = {
     return db.select().from(sessions).where(eq(sessions.userId, userId))
   },
 
-  async create(data: { id: string; userId: string; projectId: string | null; title?: string }) {
+  async create(data: { id: string; userId: string; projectId: string | null; title?: string; messages?: any[] }) {
     const result = await db.insert(sessions).values({
       id: data.id,
       userId: data.userId,
       projectId: data.projectId,
       title: data.title || 'Nowa rozmowa',
+      messages: data.messages || [],
     }).returning()
     return result[0]
   },
 
-  async update(id: string, data: { title?: string; messages?: any }) {
+  async update(id: string, data: { title?: string; messages?: any; updatedAt?: Date }) {
     const result = await db.update(sessions).set(data).where(eq(sessions.id, id)).returning()
     return result[0] || null
   },
@@ -115,7 +116,7 @@ export const vaultStore = {
     return db.select().from(vaultFiles).where(eq(vaultFiles.projectId, projectId))
   },
 
-  async create(data: { userId: string; filename: string; originalName: string; size?: number; mimeType?: string; folder?: string }) {
+  async create(data: { userId: string; filename: string; originalName: string; size?: number; mimeType?: string; folder?: string; projectId?: string | null }) {
     const result = await db.insert(vaultFiles).values({
       userId: data.userId,
       filename: data.filename,
@@ -123,6 +124,7 @@ export const vaultStore = {
       size: data.size || 0,
       mimeType: data.mimeType || 'application/octet-stream',
       folder: data.folder || '/',
+      projectId: data.projectId || null,
     }).returning()
     return result[0]
   },

@@ -31,6 +31,7 @@ export async function logAudit(params: {
       },
     })
   } catch (error) {
-    console.error('[audit] failed to log:', error)
+    const { logError } = await import('@/lib/safe-log')
+    logError('audit', error)
   }
 }

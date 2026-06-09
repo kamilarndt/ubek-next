@@ -27,6 +27,14 @@ const PROMPT_PATTERNS = [
   /\[system\]/i,
   /<\|im_start\|>/i,
   /disregard\s+(your\s+)?(instructions|rules|guidelines)/i,
+  // Additional variants for common jailbreaks / unicode / obfuscation attempts
+  /forget\s+(everything|all\s+prior|the\s+above)/i,
+  /new\s+instructions?\s*[:\-]/i,
+  /act\s+as\s+(if\s+you\s+are|a|an)\s+/i,
+  /DAN|do\s+anything\s+now/i,
+  /override\s+(all|previous|system)/i,
+  /[\u200b-\u200f\uFEFF]/, // zero-width / BOM obfuscation
+  /base64|atob|fromCharCode/i, // common encoding bypass hints in prompt
 ]
 
 export function scanInput(input: string): InjectionScanResult {

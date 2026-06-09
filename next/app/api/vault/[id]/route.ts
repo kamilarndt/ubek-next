@@ -4,6 +4,12 @@ import { verifyToken } from '@/lib/auth'
 import { vaultStore } from '@/lib/store'
 import fs from 'fs'
 import path from 'path'
+import { getConfig } from '@/lib/config'
+
+const cfg = getConfig()
+const UPLOAD_DIR_DEFAULT = cfg.uploadDir
+
+// Note: path and fs used for defense-in-depth containment checks on every access.
 
 async function getUserId() {
   const cookieStore = await cookies()
@@ -24,11 +30,11 @@ export async function GET(
   const file = await vaultStore.findById(id)
   if (!file) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (file.userId !== userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  const uploadDir = process.env.UPLOAD_DIR || './uploads'
-  const resolvedPath = path.resolve(uploadDir, file.filename);
-  const allowedDir = path.resolve(uploadDir);
-  if (!resolvedPath.startsWith(allowedDir)) {
-    return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  const uploadDir = UPLOAD_DIR_DEFAULT
+  const resolvedPath = path.resolve(uploadDir, file.filename)
+  const allowedDir = path.resolve(uploadDir)
+  if (!resolvedPath.startsWith(allowedDir + path.sep) && resolvedPath !== allowedDir) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 })
   }
   const filePath = resolvedPath
   const buffer = fs.readFileSync(filePath)
@@ -53,6 +59,16 @@ export async function DELETE(
   if (!file) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
   if (file.userId !== userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  // Soft delete by design (see schema deletedAt + recovery needs).
+  // Files on disk are intentionally kept for a grace period / admin audit.
+  // A future background job should unlink files where deletedAt < NOW() - retention.
+  // We still perform the containment check for defense-in-depth.
+  const uploadDir = UPLOAD_DIR_DEFAULT
+  const resolvedPath = path.resolve(uploadDir, file.filename)
+  const allowedDir = path.resolve(uploadDir)
+  if (!resolvedPath.startsWith(allowedDir + path.sep) && resolvedPath !== allowedDir) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 })
+  }
   await vaultStore.update(id, { deletedAt: new Date() })
   return NextResponse.json({ success: true })
 }

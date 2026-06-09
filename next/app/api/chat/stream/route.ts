@@ -9,9 +9,11 @@ import {
 } from "@/lib/store";
 import { createRateLimiter, getUserKey } from "@/lib/guardrails/rate-limiter";
 import { scanInput } from "@/lib/guardrails/injection-detector";
+import { getConfig } from "@/lib/config";
 
-const AGENT_API_KEY = process.env.AGENT_API_KEY;
-const PI_AGENT_URL = process.env.PI_AGENT_URL || "http://localhost:4000";
+const config = getConfig();
+const AGENT_API_KEY = config.agentApiKey;
+const PI_AGENT_URL = config.piAgentUrl;
 
 const limiter = createRateLimiter(20, 60 * 1000);
 
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
   if (!token)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const secret = process.env.JWT_SECRET;
+  const secret = config.jwtSecret;
   if (!secret)
     return NextResponse.json(
       { error: "Service configuration error" },
@@ -63,19 +65,36 @@ export async function POST(req: Request) {
   }
 
   const { chatId, message, projectId } = payload;
-  let session;
-  if (chatId) {
-    session = await sessionStore.findById(chatId);
-    if (!session || session.userId !== userSub)
-      return NextResponse.json({ error: "Not Found" }, { status: 404 });
-  } else {
-    const { randomUUID } = await import("crypto");
-    session = await sessionStore.create({
+
+  // Extracted helper to keep the route handler thinner (layering / fat controller reduction).
+  async function getOrCreateSessionWithInitialMessage(
+    chatId: string | undefined,
+    userSub: string,
+    message: string,
+    projectId?: string,
+  ) {
+    if (chatId) {
+      const s = await sessionStore.findById(chatId);
+      if (!s || s.userId !== userSub) throw new Error('Not Found');
+      return s;
+    }
+    const { randomUUID } = await import('crypto');
+    const initialMessages = [{ role: 'user', content: message }];
+    return await sessionStore.create({
       id: randomUUID(),
       userId: userSub,
       projectId: projectId || null,
-      title: message.slice(0, 80) || "Nowa rozmowa",
+      title: message.slice(0, 80) || 'Nowa rozmowa',
+      messages: initialMessages,
     });
+  }
+
+  let session;
+  try {
+    session = await getOrCreateSessionWithInitialMessage(chatId, userSub, message, projectId);
+  } catch (e: any) {
+    const status = e.message === 'Not Found' ? 404 : 401;
+    return NextResponse.json({ error: e.message || 'Unauthorized' }, { status });
   }
 
   // Determine enabled extensions for this project's tools (per-project extension assignment)
@@ -87,10 +106,8 @@ export async function POST(req: Request) {
       );
       enabledExtensions = assignments.map((a: any) => a.extensionId);
     } catch (e) {
-      console.error(
-        `Failed to load project extensions for tools (projectId=${session.projectId}):`,
-        e,
-      );
+      const { logError } = await import('@/lib/safe-log')
+      logError('chat/stream/extensions', e, { projectId: session.projectId })
     }
   }
 
@@ -104,28 +121,31 @@ export async function POST(req: Request) {
   }
 
   // Perform semantic search on the Knowledge Base if the project has RAG chunks
+  // Extracted for testability and to keep the route thinner (layering improvement).
+  async function loadKbContext(projectId: string, userMessage: string): Promise<string> {
+    try {
+      const chunks = await ragChunkStore.findByProjectId(projectId);
+      if (!chunks || chunks.length === 0) return "";
+      const { embedText, searchChunks } = await import("@/lib/rag");
+      const queryEmbedding = await embedText(userMessage);
+      const searchable = chunks.map((c) => ({
+        id: c.id,
+        text: c.content,
+        embedding: (c.embedding as number[]) || [],
+      }));
+      const results = searchChunks(queryEmbedding, searchable, 5);
+      if (results.length === 0) return "";
+      return "\n\nKnowledge Base context:\n" + results.map((r) => r.text).join("\n---\n");
+    } catch (err) {
+      const { logError } = await import('@/lib/safe-log')
+      logError('chat/stream/rag', err)
+      return "";
+    }
+  }
+
   let kbContext = "";
   if (session.projectId && session.projectId !== "default") {
-    try {
-      const chunks = await ragChunkStore.findByProjectId(session.projectId);
-      if (chunks && chunks.length > 0) {
-        const { embedText, searchChunks } = await import("@/lib/rag");
-        const queryEmbedding = await embedText(message);
-        const searchable = chunks.map((c) => ({
-          id: c.id,
-          text: c.content,
-          embedding: (c.embedding as number[]) || [],
-        }));
-        const results = searchChunks(queryEmbedding, searchable, 5);
-        if (results.length > 0) {
-          kbContext =
-            "\n\nKnowledge Base context:\n" +
-            results.map((r) => r.text).join("\n---\n");
-        }
-      }
-    } catch (err) {
-      console.error("RAG semantic search error:", err);
-    }
+    kbContext = await loadKbContext(session.projectId, message);
   }
 
   if (kbContext) {

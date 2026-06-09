@@ -11,8 +11,14 @@ vi.mock('@/lib/auth', () => ({ verifyToken: mockVerifyToken }))
 
 const mockFindById = vi.fn()
 const mockCreate = vi.fn()
+const mockFindByProjectId = vi.fn()
+const mockProjectExtensionFind = vi.fn()
+const mockRagFind = vi.fn()
 vi.mock('@/lib/store', () => ({
   sessionStore: { findById: mockFindById, create: mockCreate },
+  projectStore: { findById: vi.fn() },
+  projectExtensionStore: { findByProjectId: mockProjectExtensionFind },
+  ragChunkStore: { findByProjectId: mockRagFind },
 }))
 
 const mockFetch = vi.fn()
@@ -40,6 +46,8 @@ describe('POST /api/chat/stream', () => {
     vi.clearAllMocks()
     mockCreate.mockResolvedValue({ id: 'session-new', userId: 'user-123', projectId: 'default' })
     mockFindById.mockResolvedValue({ id: 'session-1', userId: 'user-123', messages: [] })
+    mockProjectExtensionFind.mockResolvedValue([])
+    mockRagFind.mockResolvedValue([])
   })
 
   it('should return 401 when no token cookie', async () => {
@@ -81,6 +89,28 @@ describe('POST /api/chat/stream', () => {
     const res = await POST(req)
     expect(res.status).toBe(200)
     expect(res.headers.get('Content-Type')).toBe('text/event-stream')
+  })
+
+  it('creates session with initial user message when no chatId provided (server-side initial persistence)', async () => {
+    mockCookiesGet.mockReturnValue({ value: 'valid-token' })
+    mockVerifyToken.mockResolvedValue({ sub: 'user-123' })
+    mockFetch.mockResolvedValue(createStreamingResponse('data: {"text":"hello"}\n\n'))
+
+    const { POST } = await import('@/app/api/chat/stream/route')
+    const req = new Request('http://localhost', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Hello from user', projectId: 'proj-1' }),
+    })
+    await POST(req)
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-123',
+        projectId: 'proj-1',
+        messages: [{ role: 'user', content: 'Hello from user' }],
+      })
+    )
   })
 
   it('should pass AGENT_API_KEY header in forwarded request', async () => {

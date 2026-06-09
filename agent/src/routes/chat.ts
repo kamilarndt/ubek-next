@@ -280,12 +280,22 @@ export function createChatRouter(
       });
     }
 
+    // Hard safety timeout to bound token burn even if client disconnect + SDK abort is slow
+    // (addresses "Denial of Wallet" risk on TCP drop during long reasoning/tool loops).
+    const SAFETY_TIMEOUT_MS = 120_000; // 2 minutes per turn max
+    const safetyTimer = setTimeout(() => {
+      controller.abort();
+    }, SAFETY_TIMEOUT_MS);
+
     try {
-      await pool.getOrCreate(userId, {
+      // The pool is intended to provide long-lived per-user runtime (see SessionPool.ts and ARCHITECTURE).
+      // We capture it here even if full reuse of Pi AgentSession is not yet wired into doStreamingCall.
+      const runtime = await pool.getOrCreate(userId, {
         routerUrl: config.router.url,
         routerApiKey: config.router.apiKey,
         model: config.router.model,
       });
+      // runtime.switchSession(...) would be used in a full pooled implementation.
 
       const registry = ExtensionRegistry.getInstance({
         extensionsPath: config.extensionsPath || "extensions",
@@ -327,6 +337,8 @@ export function createChatRouter(
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
       adapter.handleEvent({ type: "error", data: { message: errorMessage } });
+    } finally {
+      clearTimeout(safetyTimer);
     }
   });
 

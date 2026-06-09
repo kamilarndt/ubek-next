@@ -56,7 +56,8 @@ function ChatPageContent() {
             body: JSON.stringify({ messages: updatedMessages }),
           });
         } catch (e) {
-          console.error("Failed to persist chat messages:", e);
+          // Client-side: use safe pattern (no full error dump in production logs if aggregated)
+          console.error("Failed to persist chat messages:", e instanceof Error ? e.message : String(e));
         }
       }
     },

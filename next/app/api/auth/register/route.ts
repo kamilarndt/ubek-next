@@ -53,7 +53,8 @@ export async function POST(req: Request) {
     const responseBody = { user: { id: user.id, email: user.email, displayName: user.name } }
     return NextResponse.json(responseBody, { status: 201 })
   } catch (err) {
-    console.error(err)
+    const { logError } = await import('@/lib/safe-log')
+    logError('auth/register', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

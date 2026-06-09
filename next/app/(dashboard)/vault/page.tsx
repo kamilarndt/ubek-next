@@ -51,7 +51,7 @@ export default function VaultPage() {
         }))
         setFiles(mapped)
       } catch (err) {
-        console.error(err)
+        const { logError } = await import('@/lib/safe-log'); logError('vault/page', err)
       } finally {
         setLoading(false)
       }

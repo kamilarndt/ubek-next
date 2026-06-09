@@ -37,6 +37,10 @@ vi.mock('@/lib/db', () => ({
 import { verifyToken } from '@/lib/auth'
 import { sessionStore } from '@/lib/store'
 
+// Ensure central config can load in tests (JWT required)
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret'
+process.env.AGENT_API_KEY = process.env.AGENT_API_KEY || 'test-agent-api-key'
+
 const mockedVerifyToken = vi.mocked(verifyToken)
 
 function mockRequest(method: string, body?: unknown, token = 'valid-token'): Request {
@@ -130,14 +134,7 @@ describe('GET /api/chat/sessions/[id]/messages', () => {
   beforeEach(() => { vi.clearAllMocks(); mockedVerifyToken.mockResolvedValue({ sub: 'user-123' }) })
 
   it('returns messages', async () => {
-    const mockDb = (await import('@/lib/db')).db
-    vi.mocked(mockDb.select).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([mockSession])),
-        })),
-      })),
-    } as never)
+    vi.mocked(sessionStore.findById).mockResolvedValue(mockSession)
     const { GET } = await import('@/app/api/chat/sessions/[id]/messages/route')
     const res = await GET(mockRequest('GET'), { params: Promise.resolve({ id: 's1' }) })
     expect(res.status).toBe(200)

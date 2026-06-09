@@ -83,10 +83,19 @@ export class UserSessionPool {
   }
 
   private createRuntime(
-    _options: RuntimeOptions,
+    options: RuntimeOptions,
   ): AgentSessionRuntimeLike {
+    // NOTE: Real long-lived Pi SDK AgentSessionRuntime should be created here
+    // and reused across turns for a user (via switchSession per project).
+    // Current architecture (see routes/chat.ts) creates fresh sessions inside
+    // doStreamingCall on every request. This stub is a placeholder until full
+    // integration of pooled real runtime (to honor "long-lived sessions" in docs/ARCHITECTURE.md).
+    // For now we return a minimal handle so the pool is not completely vestigial.
     return {
-      switchSession: async () => ({}),
+      switchSession: async (file: string, _opts: unknown) => {
+        // In a full impl this would return a real cached/reused AgentSession
+        return { id: `stub-session-${file}`, options }
+      },
     }
   }
 

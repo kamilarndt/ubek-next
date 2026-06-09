@@ -42,3 +42,17 @@ export async function closeDb() {
     _db = null
   }
 }
+
+/**
+ * Run work inside a database transaction.
+ * Use for multi-statement operations that must be atomic (e.g. session + messages, vault + rag chunks, audit).
+ * The callback receives a tx that can be passed to stores if they are updated to accept an executor.
+ */
+export async function withTransaction<T>(
+  fn: (tx: ReturnType<ReturnType<typeof drizzle>['transaction']> extends Promise<infer Tx> ? Tx : any) => Promise<T>
+): Promise<T> {
+  const database = getDb()
+  return database.transaction(async (tx) => {
+    return fn(tx as any)
+  })
+}

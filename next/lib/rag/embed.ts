@@ -1,5 +1,8 @@
-const ROUTER_URL = process.env.ROUTER_URL || 'http://localhost:18881/v1'
-const ROUTER_API_KEY = process.env.ROUTER_API_KEY || ''
+import { getConfig } from '@/lib/config'
+
+const cfg = getConfig()
+const ROUTER_URL = cfg.routerUrl
+const ROUTER_API_KEY = cfg.routerApiKey
 
 export async function embedText(text: string): Promise<number[]> {
   const res = await fetch(`${ROUTER_URL}/embeddings`, {

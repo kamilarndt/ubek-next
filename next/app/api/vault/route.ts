@@ -4,6 +4,11 @@ import { verifyToken } from '@/lib/auth'
 import { vaultStore } from '@/lib/store'
 import fs from 'fs'
 import path from 'path'
+import { getConfig } from '@/lib/config'
+
+const cfg = getConfig()
+const MAX_FILE_SIZE = cfg.maxFileSize
+const UPLOAD_DIR_DEFAULT = cfg.uploadDir
 
 const ALLOWED_MIME_TYPES = [
   'text/plain',
@@ -19,8 +24,6 @@ const ALLOWED_MIME_TYPES = [
   'application/x-tar',
   'application/gzip',
 ]
-
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '104857600', 10)
 
 // Helper to get auth user id
 async function getUserId() {
@@ -50,6 +53,7 @@ export async function POST(request: any) {
   // Expect multipart/form-data
   const formData = typeof (request as any).formData === 'function' ? await (request as any).formData() : (request as any).body instanceof FormData ? (request as any).body : null
   const file = formData.get('file') as File | null
+  const projectId = (formData.get('projectId') as string) || null
   if (!file) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
@@ -65,15 +69,18 @@ export async function POST(request: any) {
       { status: 400 },
     )
   }
-  const uploadDir = process.env.UPLOAD_DIR || './uploads'
+  const uploadDir = UPLOAD_DIR_DEFAULT
   // Ensure directory exists
   try {
     await fs.promises.mkdir(uploadDir, { recursive: true })
-    const filename = `${crypto.randomUUID()}${path.extname(file.name)}`
-    const resolvedPath = path.resolve(uploadDir, filename);
-    const allowedDir = path.resolve(uploadDir);
-    if (!resolvedPath.startsWith(allowedDir)) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    // Sanitize original name for storage/display safety
+    const safeOriginal = (file.name || 'file').replace(/[\\/]/g, '_').replace(/\.\./g, '_').slice(0, 200)
+    const ext = path.extname(safeOriginal) || path.extname(file.name) || ''
+    const filename = `${crypto.randomUUID()}${ext}`
+    const resolvedPath = path.resolve(uploadDir, filename)
+    const allowedDir = path.resolve(uploadDir)
+    if (!resolvedPath.startsWith(allowedDir + path.sep) && resolvedPath !== allowedDir) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
     const filePath = resolvedPath
     const arrayBuffer = await file.arrayBuffer()
@@ -82,10 +89,40 @@ export async function POST(request: any) {
       const record = await vaultStore.create({
         userId: userId as string,
         filename,
-        originalName: file.name,
+        originalName: safeOriginal,
         size: file.size,
         mimeType: file.type,
+        // project association if provided (for RAG scoping)
+        ...(projectId ? { projectId } : {}),
       })
+
+      // Basic RAG ingestion for text files (addresses missing KB population on upload).
+      // Only for safe text types; PDF/DOCX would require additional parsers (future).
+      const TEXT_MIME = ['text/plain', 'text/markdown', 'text/csv']
+      if (projectId && file.type && TEXT_MIME.includes(file.type)) {
+        try {
+          const text = await file.text()
+          const { chunkText, embedText } = await import('@/lib/rag')
+          const { ragChunkStore } = await import('@/lib/store')
+          const chunks = chunkText(text, 800) // ~reasonable size for Phase 1
+          for (let i = 0; i < chunks.length; i++) {
+            const embedding = await embedText(chunks[i])
+            await ragChunkStore.create({
+              projectId,
+              fileId: record.id,
+              position: i,
+              content: chunks[i],
+              embedding,
+              metadata: { source: safeOriginal, mime: file.type },
+            })
+          }
+        } catch (ragErr) {
+          // Best effort: do not fail the upload if RAG fails
+          const { logError } = await import('@/lib/safe-log')
+          logError('vault/rag-ingest', ragErr, { projectId, fileId: record.id })
+        }
+      }
+
       return NextResponse.json({ file: record }, { status: 201 })
     } catch (dbErr) {
       // Clean up file if DB insert fails

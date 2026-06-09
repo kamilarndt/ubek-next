@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { sessions } from '@/drizzle/schema'
-import { eq } from 'drizzle-orm'
+import { withTransaction } from '@/lib/db'
+import { sessionStore } from '@/lib/store'
+import { getConfig } from '@/lib/config'
+
+const { jwtSecret: JWT_SECRET } = getConfig()
 
 function getTokenFromRequest(req: Request): string | null {
   const cookie = req.headers.get('cookie') || ''
@@ -18,9 +20,8 @@ export async function GET(
   const token = getTokenFromRequest(_req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, process.env.JWT_SECRET )
-    const rows = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1)
-    const session = rows[0]
+    const payload = await verifyToken(token, JWT_SECRET )
+    const session = await sessionStore.findById(id)
     if (!session) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     if (session.userId !== payload.sub) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     return NextResponse.json(session.messages || [])
@@ -37,13 +38,21 @@ export async function POST(
   const token = getTokenFromRequest(req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, process.env.JWT_SECRET )
-    const rows = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1)
-    const session = rows[0]
+    const payload = await verifyToken(token, JWT_SECRET )
+    const session = await sessionStore.findById(id)
     if (!session) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     if (session.userId !== payload.sub) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const body = await req.json()
-    await db.update(sessions).set({ messages: body.messages || [] }).where(eq(sessions.id, id))
+    const newMessages = body.messages || []
+    await withTransaction(async () => {
+      // Use store inside tx context for consistency. Always touch updatedAt so
+      // clients see fresh timestamp. This reduces "stale history" risk from
+      // client-driven persistence (audit ID10).
+      await sessionStore.update(id, {
+        messages: newMessages,
+        updatedAt: new Date(),
+      })
+    })
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
