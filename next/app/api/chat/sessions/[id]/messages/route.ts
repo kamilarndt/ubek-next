@@ -20,7 +20,7 @@ export async function GET(
   const token = getTokenFromRequest(_req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, JWT_SECRET )
+    const payload = await verifyToken(token, JWT_SECRET)
     const session = await sessionStore.findById(id)
     if (!session) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     if (session.userId !== payload.sub) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -38,7 +38,7 @@ export async function POST(
   const token = getTokenFromRequest(req)
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
-    const payload = await verifyToken(token, JWT_SECRET )
+    const payload = await verifyToken(token, JWT_SECRET)
     const session = await sessionStore.findById(id)
     if (!session) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     if (session.userId !== payload.sub) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

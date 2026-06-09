@@ -13,7 +13,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const payload = await verifyToken(token, process.env.JWT_SECRET )
+    const payload = await verifyToken(token, process.env.JWT_SECRET! )
 
     const db = getDb()
     const found = await db.select().from(users).where(eq(users.id, payload.sub))

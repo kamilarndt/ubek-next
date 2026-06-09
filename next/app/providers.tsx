@@ -120,14 +120,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Redirect unauthenticated users away from protected routes
   useEffect(() => {
-    if (!isLoading && !user && !isPublicPath(pathname)) {
+    if (!isLoading && !user && (pathname ? !isPublicPath(pathname) : true)) {
       router.push('/auth/login');
     }
   }, [isLoading, user, pathname, router]);
 
   // Redirect authenticated users away from auth pages
   useEffect(() => {
-    if (!isLoading && user && isPublicPath(pathname)) {
+    if (!isLoading && user && pathname && isPublicPath(pathname)) {
       router.push('/');
     }
   }, [isLoading, user, pathname, router]);

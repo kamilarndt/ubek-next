@@ -36,7 +36,7 @@ const iconMap: Record<string, LucideIcon> = {
 export default function AppSidebar() {
   const { user, logout } = useAuth();
   const searchParams = useSearchParams();
-  const currentProjectId = searchParams.get("project") || "";
+  const currentProjectId = searchParams?.get("project") || "";
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [extensions, setExtensions] = useState<

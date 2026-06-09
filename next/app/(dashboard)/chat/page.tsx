@@ -15,7 +15,7 @@ import {
 
 function ChatPageContent() {
   const searchParams = useSearchParams();
-  const projectId = searchParams.get("project") || undefined;
+  const projectId = searchParams?.get("project") || undefined;
 
   const [sessions, setSessions] = useState<
     Array<{ id: string; title: string; updatedAt: string }>

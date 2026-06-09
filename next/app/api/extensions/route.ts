@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { extensionStore, projectExtensionStore } from "@/lib/store";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
+import { extensionStore, projectExtensionStore, projectStore } from "@/lib/store";
 
 const CORE_EXTENSIONS = [
   {
@@ -36,7 +38,7 @@ async function requireProjectOwnership(projectId: string): Promise<string | null
   const cookieStore = await cookies();
   const token = cookieStore.get("token")?.value;
   if (!token) return null;
-  const payload = await verifyToken(token, process.env.JWT_SECRET);
+  const payload = await verifyToken(token, process.env.JWT_SECRET!);
   const userId = payload.sub;
   const project = await projectStore.findById(projectId);
   if (!project || project.userId !== userId) return null;
