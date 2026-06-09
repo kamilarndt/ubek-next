@@ -6,8 +6,9 @@ import { csrfMiddleware, setCsrfCookie } from '@/lib/csrf'
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // CSRF check for mutating API routes
-  if (pathname.startsWith('/api/') && (!pathname.startsWith('/api/auth/') || pathname === '/api/auth/logout')) {
+  // CSRF check for mutating API routes (skip health, auth routes)
+  const skipCsrfPaths = ['/api/health', '/api/auth/login', '/api/auth/register'];
+  if (pathname.startsWith('/api/') && !skipCsrfPaths.some(p => pathname.startsWith(p)) && (!pathname.startsWith('/api/auth/') || pathname === '/api/auth/logout')) {
     const csrfResult = csrfMiddleware(request)
     if (csrfResult) return csrfResult
   }

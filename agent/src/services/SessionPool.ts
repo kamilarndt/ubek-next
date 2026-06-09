@@ -15,6 +15,12 @@ export interface AgentSessionRuntimeLike {
 }
 
 export class UserSessionPool {
+  private maxSize: number
+  private accessOrder: string[] = []
+
+  constructor(maxSize: number = 100) {
+    this.maxSize = maxSize
+  }
   private sessions = new Map<string, SessionEntry>()
 
   async getOrCreate(
@@ -24,15 +30,22 @@ export class UserSessionPool {
     const existing = this.sessions.get(userId)
     if (existing) {
       existing.lastAccess = Date.now()
+      this.touch(userId)
       return existing.runtime as AgentSessionRuntimeLike
     }
 
+    // LRU eviction if at capacity
+    if (this.sessions.size >= this.maxSize) {
+      const lru = this.accessOrder.shift()
+      if (lru) this.sessions.delete(lru)
+    }
     const runtime = this.createRuntime(options)
     this.sessions.set(userId, {
       runtime,
       createdAt: Date.now(),
       lastAccess: Date.now(),
     })
+    this.accessOrder.push(userId)
     return runtime
   }
 
@@ -42,6 +55,8 @@ export class UserSessionPool {
 
   async release(userId: string): Promise<void> {
     this.sessions.delete(userId)
+    const idx = this.accessOrder.indexOf(userId)
+    if (idx >= 0) this.accessOrder.splice(idx, 1)
   }
 
   async cleanup(maxIdleMs: number = 30 * 60 * 1000): Promise<number> {
@@ -51,6 +66,8 @@ export class UserSessionPool {
     for (const [userId, entry] of this.sessions.entries()) {
       if (now - entry.lastAccess > maxIdleMs) {
         this.sessions.delete(userId)
+        const idx = this.accessOrder.indexOf(userId)
+        if (idx >= 0) this.accessOrder.splice(idx, 1)
         cleaned++
       }
     }
@@ -71,5 +88,11 @@ export class UserSessionPool {
     return {
       switchSession: async () => ({}),
     }
+  }
+
+  private touch(userId: string): void {
+    const idx = this.accessOrder.indexOf(userId)
+    if (idx >= 0) this.accessOrder.splice(idx, 1)
+    this.accessOrder.push(userId)
   }
 }

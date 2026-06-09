@@ -136,6 +136,13 @@ export const extensionStore = {
     return result[0] || null
   },
 
+  /** Find extensions by IDs */
+  async findByIds(ids: string[]) {
+    if (ids.length === 0) return [];
+    const { inArray } = await import('drizzle-orm');
+    return db.select().from(extensions).where(inArray(extensions.id, ids))
+  },
+
   /** List all extensions */
   async list() {
     return db.select().from(extensions)

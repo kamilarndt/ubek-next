@@ -72,11 +72,10 @@ export async function GET(request: Request) {
     // Always return precisely the assigned extensions for this project (raw list, possibly empty []).
     // Default-all core behavior for chat/tools lives in Registry.getToolsForProject([]) + sidebar fallback on error.
     // This ensures admin "assignedIds" and sidebar accurately reflect DB rows, fixing 0-assignment false-positives.
-    const exts: any[] = await Promise.all(
-      assignments.map((ass) =>
-        extensionStore.findById(ass.extensionId).then((e) => e || null),
-      ),
-    ).then((list) => list.filter(Boolean));
+    const extIds = assignments.map((ass: any) => ass.extensionId);
+    const exts: any[] = extIds.length > 0
+      ? await extensionStore.findByIds(extIds)
+      : [];
     return NextResponse.json(exts);
   }
 

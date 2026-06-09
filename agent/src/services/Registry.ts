@@ -55,6 +55,7 @@ export class ExtensionRegistry {
       if (!entry.isDirectory()) continue;
 
       const toolPath = path.resolve(corePath, entry.name, "tool.ts");
+  const jsPath = path.resolve(corePath, entry.name, "tool.js");
 
       if (!toolPath.startsWith(this.resolvedBase)) {
         continue;
@@ -80,7 +81,11 @@ export class ExtensionRegistry {
       try {
         mod = await import(toolPath);
       } catch {
-        continue;
+        try {
+          mod = await import(jsPath);
+        } catch {
+          continue;
+        }
       }
 
       const schema = mod.schema;
