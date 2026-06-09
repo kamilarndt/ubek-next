@@ -3,15 +3,6 @@ import { SdkSseAdapter } from '../services/SdkSseAdapter'
 import { UserSessionPool } from '../services/SessionPool'
 import type { Config } from '../types'
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
-}
-
 function validateMessage(value: unknown): string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error('message must be a non-empty string')
@@ -86,7 +77,75 @@ export function createChatRouter(
         model: config.router.model,
       })
 
-      adapter.handleEvent({ type: 'text', data: { text: escapeHtml(message) } })
+      const routerUrl = config.router.url.replace(/\/+$/, '')
+      const routerResponse = await fetch(`${routerUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.router.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.router.model || 'auto',
+          messages: [{ role: 'user', content: message }],
+          stream: true,
+        }),
+      })
+
+      if (!routerResponse.ok) {
+        adapter.handleEvent({
+          type: 'error',
+          data: { message: `Router LLM error: ${routerResponse.status}` },
+        })
+        adapter.handleEvent({ type: 'finish', data: { finish_reason: 'error' } })
+        return
+      }
+
+      const reader = routerResponse.body?.getReader()
+      if (!reader) {
+        adapter.handleEvent({ type: 'error', data: { message: 'No response body from Router LLM' } })
+        adapter.handleEvent({ type: 'finish', data: { finish_reason: 'error' } })
+        return
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let hasContent = false
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed || !trimmed.startsWith('data: ')) continue
+
+          const jsonData = trimmed.slice(6)
+          if (jsonData === '[DONE]') continue
+
+          try {
+            const parsed = JSON.parse(jsonData)
+            const text = parsed.choices?.[0]?.delta?.content || ''
+            if (text) {
+              hasContent = true
+              adapter.handleEvent({ type: 'text', data: { text } })
+            }
+          } catch {
+            // skip malformed JSON chunks
+          }
+        }
+      }
+
+      if (!hasContent) {
+        adapter.handleEvent({
+          type: 'text',
+          data: { text: 'I received your message but could not generate a response. Please try again.' },
+        })
+      }
+
       adapter.handleEvent({ type: 'finish', data: { finish_reason: 'stop' } })
     } catch (error) {
       const errorMessage =
