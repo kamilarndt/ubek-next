@@ -13,6 +13,7 @@ export function loadConfig(): Config {
     agentApiKey: process.env.AGENT_API_KEY!,
     jwtSecret: process.env.JWT_SECRET!,
     extensionsPath: process.env.EXTENSIONS_PATH || './extensions',
+    nextJsUrl: process.env.NEXTJS_URL || 'http://localhost:3000',
     router: {
       url: process.env.ROUTER_URL!,
       apiKey: process.env.ROUTER_API_KEY!,

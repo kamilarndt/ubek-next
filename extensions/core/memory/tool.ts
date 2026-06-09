@@ -14,23 +14,86 @@ export const schema = z.object({
 
 export type Params = z.infer<typeof schema>
 
-const memoryStore = new Map<string, string>()
+const NEXTJS_URL = process.env.NEXTJS_URL || 'http://localhost:3000'
 
-export async function execute(_params: Params): Promise<{ content: { type: string; text: string }[] }> {
+const memoryStores = new Map<string, Map<string, string>>()
+const loadedUsers = new Set<string>()
+
+async function getUserFactsApi(userId: string): Promise<{ key: string; value: string }[]> {
+  try {
+    const res = await fetch(`${NEXTJS_URL}/api/user-facts?userId=${encodeURIComponent(userId)}`, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) return []
+    return await res.json()
+  } catch {
+    return []
+  }
+}
+
+async function storeUserFactApi(userId: string, key: string, value: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${NEXTJS_URL}/api/user-facts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, key, value }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function deleteUserFactApi(userId: string, key: string): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${NEXTJS_URL}/api/user-facts?userId=${encodeURIComponent(userId)}&key=${encodeURIComponent(key)}`,
+      { method: 'DELETE' },
+    )
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function getStore(userId: string): Promise<Map<string, string>> {
+  if (!memoryStores.has(userId)) {
+    memoryStores.set(userId, new Map())
+  }
+  const store = memoryStores.get(userId)!
+
+  if (!loadedUsers.has(userId)) {
+    const facts = await getUserFactsApi(userId)
+    for (const fact of facts) {
+      store.set(fact.key, fact.value)
+    }
+    loadedUsers.add(userId)
+  }
+
+  return store
+}
+
+export async function execute(
+  _params: Params,
+  context?: { userId?: string },
+): Promise<{ content: { type: string; text: string }[] }> {
   const params = schema.parse(_params)
   const { action, key, value } = params
+  const userId = context?.userId || 'default'
+  const store = await getStore(userId)
 
   switch (action) {
     case 'store': {
       if (!value) {
         return { content: [{ type: 'text', text: 'Error: value is required for store action.' }] }
       }
-      memoryStore.set(key, value)
+      store.set(key, value)
+      await storeUserFactApi(userId, key, value)
       return { content: [{ type: 'text', text: `Stored memory: "${key}"` }] }
     }
 
     case 'retrieve': {
-      const stored = memoryStore.get(key)
+      const stored = store.get(key)
       if (!stored) {
         return { content: [{ type: 'text', text: `No memory found for key: "${key}"` }] }
       }
@@ -38,7 +101,7 @@ export async function execute(_params: Params): Promise<{ content: { type: strin
     }
 
     case 'list': {
-      const keys = Array.from(memoryStore.keys())
+      const keys = Array.from(store.keys())
       if (keys.length === 0) {
         return { content: [{ type: 'text', text: 'No memories stored.' }] }
       }
@@ -46,8 +109,11 @@ export async function execute(_params: Params): Promise<{ content: { type: strin
     }
 
     case 'delete': {
-      const existed = memoryStore.has(key)
-      memoryStore.delete(key)
+      const existed = store.has(key)
+      store.delete(key)
+      if (existed) {
+        await deleteUserFactApi(userId, key)
+      }
       return {
         content: [{ type: 'text', text: existed ? `Deleted memory: "${key}"` : `No memory found for key: "${key}"` }],
       }

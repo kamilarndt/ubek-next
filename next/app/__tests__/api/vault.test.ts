@@ -24,6 +24,16 @@ vi.mock('@/lib/store', () => ({
   },
 }))
 
+vi.mock('fs', () => ({
+  default: {
+    readFileSync: vi.fn().mockReturnValue(Buffer.from('test file content')),
+    promises: {
+      mkdir: vi.fn().mockResolvedValue(undefined),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+    },
+  },
+}))
+
 describe('Vault API', () => {
   const mockUserId = 'user-123'
   const mockToken = 'mock-token'

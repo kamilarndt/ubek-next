@@ -33,7 +33,6 @@ export async function createApp(): Promise<express.Application> {
 
   process.on('SIGTERM', () => {
     clearInterval(cleanupTimer)
-    pool.releaseAll?.()
   })
 
   return app

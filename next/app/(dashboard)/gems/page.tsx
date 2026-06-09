@@ -1,9 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import {
   Gem,
   Code,
@@ -11,12 +14,14 @@ import {
   Pencil,
   Trash2,
   X,
+  Loader2,
+  AlertCircle,
   type LucideIcon,
 } from 'lucide-react'
 
 const iconMap: Record<string, LucideIcon> = {
-  Gem,
-  Code,
+  gem: Gem,
+  code: Code,
 }
 
 const colorMap: Record<string, string> = {
@@ -26,83 +31,170 @@ const colorMap: Record<string, string> = {
   orange: 'bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400',
 }
 
-interface Gem {
+interface Project {
   id: string
+  userId: string
   name: string
+  instructions: string
   icon: string
-  description: string
-  color: string
+  createdAt: Date
+  updatedAt: Date
 }
 
-const initialGems: Gem[] = [
-  {
-    id: '1',
-    name: 'General',
-    icon: 'Gem',
-    description: 'Everyday assistant',
-    color: 'blue',
-  },
-  {
-    id: '2',
-    name: 'Development',
-    icon: 'Code',
-    description: 'Code helper',
-    color: 'green',
-  },
-]
+const colors = ['blue', 'green', 'purple', 'orange']
+const DEFAULT_ICON = 'gem'
+
+/** Map DB project to UI gem card */
+function projectToGem(project: Project) {
+  return {
+    id: project.id,
+    name: project.name,
+    icon: iconMap[project.icon] ? project.icon : DEFAULT_ICON,
+    description: project.instructions || 'No description',
+    color: colors[Math.abs(project.id.charCodeAt(0)) % colors.length],
+  }
+}
 
 export default function GemsPage() {
   const { user } = useAuth()
-  const [gems, setGems] = useState<Gem[]>(initialGems)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [gems, setGems] = useState<ReturnType<typeof projectToGem>[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDescription, setNewDescription] = useState('')
+  const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  function handleCreate() {
-    if (!newName.trim()) return
-    const colors = ['blue', 'green', 'purple', 'orange']
-    const newGem: Gem = {
-      id: crypto.randomUUID(),
-      name: newName.trim(),
-      icon: 'Gem',
-      description: newDescription.trim(),
-      color: colors[gems.length % colors.length],
+  const fetchProjects = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const res = await fetch('/api/projects', { credentials: 'include' })
+      if (!res.ok) {
+        throw new Error('Failed to load projects')
+      }
+      const data = (await res.json()) as Project[]
+      setProjects(data)
+      setGems(data.map(projectToGem))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setLoading(false)
     }
-    setGems((prev) => [...prev, newGem])
-    setNewName('')
-    setNewDescription('')
-    setShowForm(false)
+  }, [])
+
+  useEffect(() => {
+    fetchProjects()
+  }, [fetchProjects])
+
+  async function handleCreate() {
+    if (!newName.trim()) return
+    try {
+      setCreating(true)
+      setError(null)
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: newName.trim(),
+          instructions: newDescription.trim(),
+        }),
+      })
+      if (!res.ok) {
+        throw new Error('Failed to create project')
+      }
+      const created = (await res.json()) as Project
+      setProjects((prev) => [...prev, created])
+      setGems((prev) => [...prev, projectToGem(created)])
+      setNewName('')
+      setNewDescription('')
+      setShowForm(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create')
+    } finally {
+      setCreating(false)
+    }
   }
 
-  function handleDelete(id: string) {
-    setGems((prev) => prev.filter((g) => g.id !== id))
+  async function handleDelete(id: string) {
+    try {
+      setDeletingId(id)
+      setError(null)
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        throw new Error('Failed to delete project')
+      }
+      setProjects((prev) => prev.filter((p) => p.id !== id))
+      setGems((prev) => prev.filter((g) => g.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
-  function startEditing(gem: Gem) {
+  function startEditing(gem: ReturnType<typeof projectToGem>) {
+    const project = projects.find((p) => p.id === gem.id)
+    if (!project) return
     setEditingId(gem.id)
-    setEditName(gem.name)
-    setEditDescription(gem.description)
+    setEditName(project.name)
+    setEditDescription(project.instructions)
   }
 
-  function handleEditSave(id: string) {
+  async function handleEditSave(id: string) {
     if (!editName.trim()) return
-    setGems((prev) =>
-      prev.map((g) =>
-        g.id === id
-          ? { ...g, name: editName.trim(), description: editDescription.trim() }
-          : g
+    try {
+      setSavingId(id)
+      setError(null)
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: editName.trim(),
+          instructions: editDescription.trim(),
+        }),
+      })
+      if (!res.ok) {
+        throw new Error('Failed to update project')
+      }
+      const updated = (await res.json()) as Project
+      setProjects((prev) =>
+        prev.map((p) => (p.id === id ? updated : p))
       )
-    )
-    setEditingId(null)
+      setGems((prev) =>
+        prev.map((g) => (g.id === id ? projectToGem(updated) : g))
+      )
+      setEditingId(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSavingId(null)
+    }
   }
 
   function handleEditCancel() {
     setEditingId(null)
     setEditName('')
     setEditDescription('')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      </div>
+    )
   }
 
   return (
@@ -125,6 +217,23 @@ export default function GemsPage() {
           New Gem
         </button>
       </header>
+
+      {/* Error banner */}
+      {error && (
+        <div className="mx-8 mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+          <span className="text-sm text-red-700 dark:text-red-300 flex-1">
+            {error}
+          </span>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-500 hover:text-red-700 dark:hover:text-red-300"
+            aria-label="Dismiss error"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* New gem inline form */}
       {showForm && (
@@ -191,9 +300,10 @@ export default function GemsPage() {
               </button>
               <button
                 onClick={handleCreate}
-                disabled={!newName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!newName.trim() || creating}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
+                {creating && <Loader2 className="w-4 h-4 animate-spin" />}
                 Create Gem
               </button>
             </div>
@@ -226,11 +336,16 @@ export default function GemsPage() {
               const Icon = iconMap[gem.icon] || Gem
               const colorClass = colorMap[gem.color] || colorMap.blue
               const isEditing = editingId === gem.id
+              const isSaving = savingId === gem.id
+              const isDeleting = deletingId === gem.id
 
               return (
                 <div
                   key={gem.id}
-                  className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 hover:shadow-md transition-shadow"
+                  className={cn(
+                    'bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 hover:shadow-md transition-shadow',
+                    isDeleting && 'opacity-50 pointer-events-none'
+                  )}
                 >
                   {isEditing ? (
                     <div className="space-y-3">
@@ -249,15 +364,17 @@ export default function GemsPage() {
                       <div className="flex items-center gap-2 justify-end">
                         <button
                           onClick={handleEditCancel}
-                          className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                          disabled={isSaving}
+                          className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-50"
                         >
                           Cancel
                         </button>
                         <button
                           onClick={() => handleEditSave(gem.id)}
-                          disabled={!editName.trim()}
-                          className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={!editName.trim() || isSaving}
+                          className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                         >
+                          {isSaving && <Loader2 className="w-3 h-3 animate-spin" />}
                           Save
                         </button>
                       </div>
@@ -283,10 +400,15 @@ export default function GemsPage() {
                           </button>
                           <button
                             onClick={() => handleDelete(gem.id)}
-                            className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                            disabled={isDeleting}
+                            className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
                             aria-label={`Delete ${gem.name}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            {isDeleting ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
                           </button>
                         </div>
                       </div>

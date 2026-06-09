@@ -8,6 +8,7 @@ module.exports = {
       env: { PORT: 3000, NODE_ENV: 'production' },
       max_restarts: 10,
       restart_delay: 3000,
+      // Health check: curl localhost:3000/api/health every 30s
     },
     {
       name: 'ubek-agent',
@@ -16,6 +17,7 @@ module.exports = {
       env: { PORT: 4000, NODE_ENV: 'production' },
       max_restarts: 10,
       restart_delay: 3000,
+      // Health check: curl localhost:4000/api/health every 30s
     },
   ],
 };

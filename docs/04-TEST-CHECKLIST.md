@@ -53,16 +53,16 @@
 - [ ] Multi-step tool calling: tool-result → next step → finish
 - [ ] Błąd toola: tool-output z isError: true
 
-### TenantSessionPool
-- [ ] getOrCreate(tenantId) zwraca AgentSession
-- [ ] Dwa różne tenantId → dwie różne sesje
+### UserSessionPool
+- [ ] getOrCreate(userId) zwraca AgentSession
+- [ ] Dwa różne userId → dwie różne sesje
 - [ ] Session timeout: brak aktywności przez 30min → cleanup
 - [ ] AgentSession ma załadowane tool-e z extensions/*/tool.ts
 
 ### Extensions Loading
 - [ ] `_registry.ts` importuje wszystkie tool.ts
-- [ ] loadTenantExtensions(tenantId) zwraca tylko tool-e przypisane do tenant
-- [ ] Tenant bez extensionów → tylko Default Tools
+- [ ] loadUserExtensions(userId) zwraca tylko tool-e przypisane do usera
+- [ ] User bez extensionów → tylko Default Tools
 - [ ] Nowy extension → restart Pi Agenta → tool dostępny
 
 ### Guardrails

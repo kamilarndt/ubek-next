@@ -3,6 +3,8 @@ export interface Config {
   agentApiKey: string
   jwtSecret: string
   extensionsPath: string
+  defaultSystemPrompt?: string
+  nextJsUrl: string
   router: {
     url: string
     apiKey: string
@@ -25,13 +27,14 @@ export interface ToolDefinition<TParams = unknown> {
     properties: Record<string, unknown>
     required?: string[]
   }
-  execute: (params: TParams) => Promise<{ content: { type: string; text: string }[] }>
+  execute: (params: TParams, context?: { userId?: string }) => Promise<{ content: { type: string; text: string }[] }>
 }
 
 export interface ChatRequest {
   chatId: string
   projectId: string
   message: string
+  systemPrompt?: string
   messages?: Array<{
     id: string
     role: 'user' | 'assistant' | 'tool'

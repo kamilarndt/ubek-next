@@ -1,0 +1,10 @@
+{
+  "name": "memory",
+  "version": "1.0.0",
+  "description": "Store and retrieve information from long-term memory",
+  "author": "UBEK",
+  "icon": "database",
+  "route": null,
+  "sidebar": false,
+  "tools": ["memory"]
+}

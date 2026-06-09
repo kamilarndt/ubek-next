@@ -36,7 +36,7 @@ export const projects = pgTable('projects', {
 export const sessions = pgTable('sessions', {
   id: text('id').primaryKey(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
   title: text('title').notNull().default('Nowa rozmowa'),
   messages: jsonb('messages').notNull().default('[]'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -61,6 +61,7 @@ export const vaultFiles = pgTable('vault_files', {
   index('idx_vault_user').on(table.userId),
   index('idx_vault_project').on(table.projectId),
   index('idx_vault_created_at').on(table.createdAt),
+  index('idx_vault_files_user_deleted').on(table.userId, table.deletedAt),
 ])
 
 export const extensions = pgTable('extensions', {
@@ -109,6 +110,7 @@ export const ragChunks = pgTable('rag_chunks', {
 }, (table) => [
   index('idx_rag_project').on(table.projectId),
   index('idx_rag_file').on(table.fileId),
+  index('idx_rag_chunks_project_file').on(table.projectId, table.fileId),
 ])
 
 export const userFacts = pgTable('user_facts', {
@@ -120,6 +122,7 @@ export const userFacts = pgTable('user_facts', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex('idx_user_facts_key').on(table.userId, table.key),
+  index('idx_user_facts_user_id').on(table.userId),
 ])
 
 export const auditLog = pgTable('audit_log', {

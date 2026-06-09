@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { Search, Upload, FileText, Image as ImageIcon, File as GenericFile, Download, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
 interface FileItem {
   id: string
@@ -38,8 +41,15 @@ export default function VaultPage() {
       try {
         const res = await fetch('/api/vault')
         if (!res.ok) throw new Error('Failed to fetch files')
-        const data: FileItem[] = await res.json()
-        setFiles(data)
+        const data = await res.json()
+        const mapped: FileItem[] = (data.files || []).map((f: any) => ({
+          id: f.id,
+          name: f.originalName,
+          size: formatSize(f.size),
+          type: f.mimeType,
+          date: new Date(f.createdAt).toLocaleDateString()
+        }))
+        setFiles(mapped)
       } catch (err) {
         console.error(err)
       } finally {
@@ -60,19 +70,25 @@ export default function VaultPage() {
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files
     if (!selected) return
-    const formData = new FormData()
-    Array.from(selected).forEach((file) => {
-      formData.append('files', file)
-    })
     try {
-      const res = await fetch('/api/vault', {
-        method: 'POST',
-        headers: getCsrfHeader(),
-        body: formData,
-      })
-      if (!res.ok) throw new Error('Upload failed')
-      const uploaded: FileItem[] = await res.json()
-      setFiles((prev) => [...prev, ...uploaded])
+      for (const file of Array.from(selected)) {
+        const formData = new FormData()
+        formData.append('file', file)
+        const res = await fetch('/api/vault', {
+          method: 'POST',
+          headers: getCsrfHeader(),
+          body: formData,
+        })
+        if (!res.ok) throw new Error('Upload failed')
+        const { file: uploadedRecord } = await res.json()
+        setFiles((prev) => [...prev, {
+          id: uploadedRecord.id,
+          name: uploadedRecord.originalName,
+          size: formatSize(uploadedRecord.size),
+          type: uploadedRecord.mimeType,
+          date: new Date(uploadedRecord.createdAt).toLocaleDateString()
+        }])
+      }
     } catch (err) {
       console.error(err)
     } finally {
@@ -107,31 +123,18 @@ export default function VaultPage() {
         <div className="flex items-center gap-3">
           <div className="relative max-w-xs">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
+            <Input
               type="text"
               placeholder="Search files..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={cn(
-                'w-full pl-9 pr-3 py-1.5 rounded-md text-sm',
-                'bg-gray-100 dark:bg-gray-800',
-                'text-gray-900 dark:text-gray-100',
-                'placeholder:text-gray-400 dark:placeholder:text-gray-500',
-                'focus:outline-none focus:ring-2 focus:ring-blue-500'
-              )}
+              className="pl-9"
             />
           </div>
-          <button
-            onClick={handleUploadClick}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium',
-              'bg-blue-600 text-white hover:bg-blue-700',
-              'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-            )}
-          >
-            <Upload className="h-4 w-4" />
+          <Button onClick={handleUploadClick}>
+            <Upload className="h-4 w-4 mr-1" />
             Upload
-          </button>
+          </Button>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelected} />
         </div>
       </header>
@@ -171,12 +174,12 @@ export default function VaultPage() {
                   <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{file.date}</td>
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => handleDownload(file)} className="p-1 text-gray-500 hover:text-blue-600 transition-colors" aria-label={`Download ${file.name}`}>
+                      <Button variant="ghost" size="icon" onClick={() => handleDownload(file)} aria-label={`Download ${file.name}`}>
                         <Download className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => handleDelete(file.id)} className="p-1 text-gray-500 hover:text-red-600 transition-colors" aria-label={`Delete ${file.name}`}>
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(file.id)} aria-label={`Delete ${file.name}`}>
                         <Trash2 className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>

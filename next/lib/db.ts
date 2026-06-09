@@ -13,12 +13,20 @@ export function getDb() {
       database: process.env.PGDATABASE || 'ubek_next',
       user: process.env.PGUSER || 'ubek',
       password: process.env.PGPASSWORD || 'ubek',
+      max: 20,
+      idleTimeoutMillis: 30000,
     })
 
     _db = drizzle(_pool, { schema })
   }
   return _db
 }
+
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(target, prop, receiver) {
+    return Reflect.get(getDb(), prop, receiver)
+  }
+})
 
 export function getPool() {
   if (!_pool) {

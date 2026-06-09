@@ -1,0 +1,10 @@
+{
+  "name": "document-gen",
+  "version": "1.0.0",
+  "description": "Generate documents in markdown format",
+  "author": "UBEK",
+  "icon": "file-text",
+  "route": null,
+  "sidebar": false,
+  "tools": ["document_gen"]
+}

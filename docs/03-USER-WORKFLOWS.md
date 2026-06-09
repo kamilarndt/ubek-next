@@ -23,7 +23,7 @@
 1. User widzi stronę `/chat` z Conversation + PromptInput
 2. Pisze wiadomość: "Znajdź informacje o konkurencji"
 3. `useChat()` → DefaultChatTransport → POST http://localhost:4000/api/chat/stream
-4. Pi Agent odbiera → TenantSessionPool → AgentSession → Router LLM
+4. Pi Agent odbiera → UserSessionPool → AgentSession → Router LLM
 5. Agent wykonuje tool call: `web_search({ query: "konkurencja" })`
 6. Wyniki streamowane przez AI SDK Stream Protocol
 7. useChat() odbiera → AI Elements renderują:

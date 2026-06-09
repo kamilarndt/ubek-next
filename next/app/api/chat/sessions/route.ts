@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     const session = await sessionStore.create({
       id: randomUUID(),
       userId: payload.sub,
-      projectId: body.projectId || 'default',
+      projectId: body.projectId || null,
       title: body.title || 'Nowa rozmowa',
     })
     return NextResponse.json(session, { status: 201 })

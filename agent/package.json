@@ -11,17 +11,20 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "express": "^5",
-    "@earendil-works/pi-coding-agent": "^0.75",
-    "pg": "^8",
-    "jsonwebtoken": "^9",
-    "zod": "^3",
+    "@earendil-works/pi-coding-agent": "0.75.2",
     "cors": "^2",
-    "dotenv": "^16"
+    "docx": "^9.7.1",
+    "dotenv": "^16",
+    "exceljs": "^4.4.0",
+    "express": "^5",
+    "jsonwebtoken": "^9",
+    "pdfkit": "^0.19.0",
+    "pg": "^8",
+    "zod": "^3"
   },
   "devDependencies": {
-    "@types/express": "^5",
     "@types/cors": "^2",
+    "@types/express": "^5",
     "@types/jsonwebtoken": "^9",
     "@types/pg": "^8",
     "tsx": "^4",

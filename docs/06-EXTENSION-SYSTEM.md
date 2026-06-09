@@ -74,7 +74,7 @@ export const socialMediaTool = {
   },
 };
 
-// Tool jest rejestrowany w Pi SDK przez PiAgentService.loadTenantExtensions()
+// Tool jest rejestrowany w Pi SDK przez PiAgentService.loadUserExtensions()
 // Przez pi.registerTool(nazwa, definicja)
 ```
 
@@ -113,21 +113,10 @@ CREATE TABLE user_extensions (
 ```
 
 API:
-- `GET /api/extensions?tenantId=X` — lista aktywnych extensionów dla usera
-- `PUT /api/extensions` — admin przypisuje/odpina extension (admin only)
-
-## Pi Agent — tool loading
-
-```typescript
-// agent/src/PiAgentService.ts
-import { getSDK } from './sdk';
-
-class PiAgentService {
-  async loadTenantExtensions(tenantId: string) {
-    // 1. Pobierz z DB aktywne extensiony dla tenant
-    const activeExts = await db.query(
-      'SELECT extension_name FROM user_extensions WHERE tenant_id = $1 AND enabled = true',
-      [tenantId]
+- `GET /api/extensions?userId=X` — lista aktywnych extensionów dla usera
+  async loadUserExtensions(userId: string) {
+      'SELECT extension_name FROM user_extensions WHERE user_id = $1 AND enabled = true',
+      [userId]
     );
     
     // 2. Dla każdego extensionu, dynamicznie zaimportuj tool.ts

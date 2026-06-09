@@ -3,14 +3,31 @@ import { getDb } from '@/lib/db'
 import { hashPassword } from '@/lib/auth'
 import { users } from '@/drizzle/schema'
 import { eq } from 'drizzle-orm'
+import { createRateLimiter, getUserKey } from '@/lib/guardrails/rate-limiter'
+import { scanInput } from '@/lib/guardrails/injection-detector'
+
+const limiter = createRateLimiter(5, 60 * 1000)
 
 export async function POST(req: Request) {
   try {
+    const key = getUserKey(req)
+    const limit = limiter.check(key)
+    if (!limit.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
+
     const { email, password, displayName } = await req.json()
 
     // basic validation
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password required' }, { status: 400 })
+    }
+
+    const emailScan = scanInput(email)
+    const passwordScan = scanInput(password)
+    const nameScan = scanInput(displayName || '')
+    if (!emailScan.safe || !passwordScan.safe || !nameScan.safe) {
+      return NextResponse.json({ error: 'Suspicious input detected' }, { status: 400 })
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {

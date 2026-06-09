@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: ubek_next
       POSTGRES_USER: ubek
-      POSTGRES_PASSWORD: ubek
+      POSTGRES_PASSWORD: ${PGPASSWORD}
     ports:
       - "5433:5432"
     volumes:
@@ -21,11 +21,11 @@ services:
       dockerfile: Dockerfile
     environment:
       PORT: 4000
-      JWT_SECRET: ${JWT_SECRET:-ac42f4e7a4ee1071eaa1dcf7764dbec57a126453c73d3721fe36440b78c93517}
-      AGENT_API_KEY: ${AGENT_API_KEY:-6d3f05459f3f2798ca39affe109f5e20d0b431fe67b726c041cf2dde6c0d37fe}
-      ROUTER_URL: ${ROUTER_URL:-http://host.docker.internal:18881/v1}
-      ROUTER_API_KEY: ${ROUTER_API_KEY:-sk-rtr-9a293008-edad-4566-a3d8-925f4dcbd4a5}
-      MODEL: ${MODEL:-default}
+      JWT_SECRET: ${JWT_SECRET}
+      AGENT_API_KEY: ${AGENT_API_KEY}
+      ROUTER_URL: ${ROUTER_URL}
+      ROUTER_API_KEY: ${ROUTER_API_KEY}
+      MODEL: ${MODEL}
     ports:
       - "4000:4000"
     depends_on:
@@ -38,16 +38,16 @@ services:
       dockerfile: Dockerfile
     environment:
       PORT: 3000
-      JWT_SECRET: ${JWT_SECRET:-ac42f4e7a4ee1071eaa1dcf7764dbec57a126453c73d3721fe36440b78c93517}
-      AGENT_API_KEY: ${AGENT_API_KEY:-6d3f05459f3f2798ca39affe109f5e20d0b431fe67b726c041cf2dde6c0d37fe}
+      JWT_SECRET: ${JWT_SECRET}
+      AGENT_API_KEY: ${AGENT_API_KEY}
       PGHOST: postgres
       PGPORT: "5432"
       PGDATABASE: ubek_next
       PGUSER: ubek
-      PGPASSWORD: ubek
-      ROUTER_URL: ${ROUTER_URL:-http://host.docker.internal:18881/v1}
-      ROUTER_API_KEY: ${ROUTER_API_KEY:-sk-rtr-9a293008-edad-4566-a3d8-925f4dcbd4a5}
-      MODEL: ${MODEL:-default}
+      PGPASSWORD: ${PGPASSWORD}
+      ROUTER_URL: ${ROUTER_URL}
+      ROUTER_API_KEY: ${ROUTER_API_KEY}
+      MODEL: ${MODEL}
     ports:
       - "3000:3000"
     depends_on:

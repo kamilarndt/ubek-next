@@ -6,7 +6,7 @@ interface ToolCall {
   function: { name: string; arguments: string }
 }
 
-interface ChatMessage {
+export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
   tool_calls?: ToolCall[]
@@ -95,6 +95,7 @@ export function parseSSEChunk(buffer: string): { text: string; toolCalls: Map<st
 export async function executeToolCalls(
   toolCalls: Map<string, { name: string; args: string }>,
   registry: ExtensionRegistry,
+  userId?: string,
 ): Promise<ChatMessage[]> {
   const tools = await registry.loadCoreTools()
   const results: ChatMessage[] = []
@@ -123,7 +124,7 @@ export async function executeToolCalls(
     }
 
     try {
-      const result = await tool.execute(parsedArgs)
+      const result = await tool.execute(parsedArgs, { userId })
       results.push({
         role: 'tool',
         tool_call_id: tc.name,

@@ -29,7 +29,7 @@ Phase 1: max 20 użytkowników. Agent działa na bazie Pi Coding Agent SDK, fron
 |----|---------|------|
 | F-01 | Chat streaming | rozmowa z agentem przez SSE / AI SDK Stream Protocol |
 | F-02 | Auth | JWT (httpOnly cookie) — sign-up, sign-in, logout, middleware |
-| F-03 | System prompt | SKILL.md per tenant + per project instructions |
+| F-03 | System prompt | SKILL.md instructions per project |
 | F-04 | PL/EN | agent odpowiada w języku użytkownika |
 | F-05 | Guardrails | InjectionDetector, RateLimiter, AuditLogger |
 | F-06 | Frontend UI | AI Elements: Conversation, Message, PromptInput |
@@ -44,11 +44,10 @@ Phase 1: max 20 użytkowników. Agent działa na bazie Pi Coding Agent SDK, fron
 
 | ID | Feature | Opis |
 |----|---------|------|
-| F-09 | Conversation history | lista poprzednich rozmów, resume |
-| F-10 | Regenerate + Copy | akcje na odpowiedziach |
-| F-11 | Memory API | cross-session pamięć preferencji |
-| F-33 | Dynamic sidebar | zakładki z extensionów |
-| F-30 | Admin Dashboard | Agent Monitor, Extension Manager, Requests |
+| F-13 | Conversation history | lista poprzednich rozmów, resume |
+| F-14 | Regenerate + Copy | akcje na odpowiedziach |
+| F-15 | Dynamic sidebar | zakładki z extensionów |
+| F-16 | Admin Dashboard | Agent Monitor, Extension Manager, Requests |
 
 ### P2 — Future
 
@@ -66,7 +65,7 @@ Phase 1: max 20 użytkowników. Agent działa na bazie Pi Coding Agent SDK, fron
 | Wymaganie | Wartość |
 |-----------|---------|
 | Max użytkownicy (Phase 1) | 20 |
-| Tenant isolation | WHERE tenant_id = ? na każdym zapytaniu SQL |
+| User isolation | WHERE user_id = ? na każdym zapytaniu SQL |
 | Session lifetime | długość życia sesji Pi SDK (in-memory) |
 | Response time | <500ms (pierwszy token), <30s (full response) |
 | Język | PL/EN — agent dostosowuje się do języka użytkownika |

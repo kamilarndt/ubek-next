@@ -4,13 +4,29 @@ import { comparePassword, signToken } from '@/lib/auth'
 import { users } from '@/drizzle/schema'
 import { eq } from 'drizzle-orm'
 import { cookies } from 'next/headers'
+import { createRateLimiter, getUserKey } from '@/lib/guardrails/rate-limiter'
+import { scanInput } from '@/lib/guardrails/injection-detector'
+
+const limiter = createRateLimiter(10, 60 * 1000)
 
 export async function POST(req: Request) {
   try {
+    const key = getUserKey(req)
+    const limit = limiter.check(key)
+    if (!limit.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
+
     const { email, password } = await req.json()
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password required' }, { status: 400 })
+    }
+
+    const emailScan = scanInput(email)
+    const passwordScan = scanInput(password)
+    if (!emailScan.safe || !passwordScan.safe) {
+      return NextResponse.json({ error: 'Suspicious input detected' }, { status: 400 })
     }
 
     const db = getDb()

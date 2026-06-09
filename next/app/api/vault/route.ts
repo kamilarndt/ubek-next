@@ -5,6 +5,23 @@ import { vaultStore } from '@/lib/store'
 import fs from 'fs'
 import path from 'path'
 
+const ALLOWED_MIME_TYPES = [
+  'text/plain',
+  'text/csv',
+  'text/markdown',
+  'application/json',
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/zip',
+  'application/x-tar',
+  'application/gzip',
+]
+
+const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '104857600', 10)
+
 // Helper to get auth user id
 async function getUserId() {
   const cookieStore = await cookies()
@@ -36,11 +53,23 @@ export async function POST(request: any) {
   if (!file) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
+  if (file.size > MAX_FILE_SIZE) {
+    return NextResponse.json(
+      { error: `File exceeds maximum size of ${Math.round(MAX_FILE_SIZE / 1024 / 1024)}MB` },
+      { status: 400 },
+    )
+  }
+  if (file.type && !ALLOWED_MIME_TYPES.includes(file.type)) {
+    return NextResponse.json(
+      { error: `File type '${file.type}' is not allowed` },
+      { status: 400 },
+    )
+  }
   const uploadDir = process.env.UPLOAD_DIR || './uploads'
   // Ensure directory exists
   try {
     await fs.promises.mkdir(uploadDir, { recursive: true })
-    const filename = `${Date.now()}_${file.name}`
+    const filename = `${crypto.randomUUID()}${path.extname(file.name)}`
     const filePath = path.join(uploadDir, filename)
     const arrayBuffer = await file.arrayBuffer()
     await fs.promises.writeFile(filePath, Buffer.from(arrayBuffer))

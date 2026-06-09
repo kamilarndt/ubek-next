@@ -1,0 +1,10 @@
+{
+  "name": "web-search",
+  "version": "1.0.0",
+  "description": "Search the web for current information",
+  "author": "UBEK",
+  "icon": "search",
+  "route": null,
+  "sidebar": false,
+  "tools": ["web_search"]
+}

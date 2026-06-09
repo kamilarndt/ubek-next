@@ -7,7 +7,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // CSRF check for mutating API routes
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) {
+  if (pathname.startsWith('/api/') && (!pathname.startsWith('/api/auth/') || pathname === '/api/auth/logout')) {
     const csrfResult = csrfMiddleware(request)
     if (csrfResult) return csrfResult
   }

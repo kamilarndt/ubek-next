@@ -10,7 +10,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!isLoading) {
-      router.replace('/dashboard')
+      router.replace('/chat')
     }
   }, [isLoading, router])
 

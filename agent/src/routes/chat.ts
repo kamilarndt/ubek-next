@@ -1,116 +1,228 @@
-import { Router, type Request, type Response } from 'express'
-import { SdkSseAdapter } from '../services/SdkSseAdapter'
-import { UserSessionPool } from '../services/SessionPool'
-import { ExtensionRegistry } from '../services/Registry'
-import { callRouterLLM, parseSSEChunk, executeToolCalls } from '../services/chat-service'
-import type { Config } from '../types'
+import { Router, type Request, type Response } from "express";
+import { SdkSseAdapter } from "../services/SdkSseAdapter";
+import { UserSessionPool } from "../services/SessionPool";
+import { ExtensionRegistry } from "../services/Registry";
+import {
+  callRouterLLM,
+  parseSSEChunk,
+  executeToolCalls,
+  type ChatMessage,
+} from "../services/chat-service";
+import type { Config } from "../types";
+
+const MAX_TOOL_ITERATIONS = 10;
 
 function validateMessage(value: unknown): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error('message must be a non-empty string')
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("message must be a non-empty string");
   }
   if (value.length > 10000) {
-    throw new Error('message exceeds maximum length')
+    throw new Error("message exceeds maximum length");
   }
-  return value
+  return value;
 }
 
 function validateChatId(value: unknown): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error('chatId must be a non-empty string')
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("chatId must be a non-empty string");
   }
-  return value
+  return value;
 }
 
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(userId: string, maxPerMinute = 30): void {
-  const now = Date.now()
-  const entry = rateLimitMap.get(userId)
+  const now = Date.now();
+  const entry = rateLimitMap.get(userId);
   if (!entry || now >= entry.resetAt) {
-    rateLimitMap.set(userId, { count: 1, resetAt: now + 60000 })
-    return
+    rateLimitMap.set(userId, { count: 1, resetAt: now + 60000 });
+    return;
   }
   if (entry.count >= maxPerMinute) {
-    throw new Error('Rate limit exceeded. Try again later.')
+    throw new Error("Rate limit exceeded. Try again later.");
   }
-  entry.count++
+  entry.count++;
 }
 
 async function doStreamingCall(
   config: Config,
-  messages: Array<{ role: string; content: string }>,
+  messages: ChatMessage[],
   registry: ExtensionRegistry,
-  write: (chunk: string) => void,
+  adapter: SdkSseAdapter,
+  userId: string,
+  signal: AbortSignal,
+  projectId: string | null = null,
+  enabledExtensions: string[] = [],
 ): Promise<void> {
-  const tools = await registry.loadCoreTools()
-  const { stream } = await callRouterLLM(config, messages as any, tools)
+  const piSdk = await import("@earendil-works/pi-coding-agent");
+  const {
+    AuthStorage,
+    ModelRegistry,
+    createAgentSession,
+    SessionManager,
+    SettingsManager,
+  } = piSdk;
 
-  if (!stream) {
-    write(JSON.stringify({ type: 'error', data: { message: 'No response stream' } }))
-    return
+  const authStorage = AuthStorage.create();
+  authStorage.setRuntimeApiKey("router", config.router.apiKey);
+
+  const modelRegistry = ModelRegistry.inMemory(authStorage);
+  const baseUrl = config.router.url.endsWith("/v1")
+    ? config.router.url
+    : `${config.router.url.replace(/\/+$/, "")}/v1`;
+
+  modelRegistry.registerProvider("router", {
+    name: "Router LLM",
+    baseUrl: baseUrl,
+    apiKey: config.router.apiKey,
+    api: "openai",
+    models: [
+      {
+        id: config.router.model || "default",
+        name: "Router LLM Model",
+        api: "openai",
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 8192,
+        maxTokens: 4096,
+      },
+    ],
+  });
+
+  const model = modelRegistry.find("router", config.router.model || "default");
+  if (!model) {
+    throw new Error(`Model not found: router/${config.router.model}`);
   }
 
-  const reader = stream.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let collectedText = ''
-  let collectedToolCalls = new Map<string, { name: string; args: string }>()
+  const toolsForProject = await registry.getToolsForProject(
+    projectId || "",
+    enabledExtensions,
+  );
+  const customTools = toolsForProject.map((t) => ({
+    name: t.name,
+    label: t.name.replace(/_/g, " "),
+    description: t.description,
+    parameters: t.parameters as any,
+    execute: async (toolCallId: string, params: any) => {
+      const result = await t.execute(params, { userId });
+      return {
+        content: result.content.map((c) => ({
+          type: c.type as "text",
+          text: c.text,
+        })),
+        details: {},
+      };
+    },
+  }));
+  // piToolsList must be consistent with customTools (the only place real execute + context is provided).
+  // - enabledExtensions=[] (or absent) -> getToolsForProject returns all core (happy default path)
+  // - enabled non-empty but 0 matches after normalization -> empty list (do not silently fallback names without wrappers)
+  const piToolsList =
+    toolsForProject.length > 0
+      ? toolsForProject.map((t) => t.name)
+      : enabledExtensions.length > 0
+        ? []
+        : ["web_search", "vision", "document_gen", "memory"];
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  const settingsManager = SettingsManager.inMemory({
+    compaction: { enabled: false },
+    retry: { enabled: false },
+  });
 
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-    const chunk = lines.join('\n')
+  const systemMsg =
+    messages.find((m) => m.role === "system")?.content ||
+    config.defaultSystemPrompt ||
+    "";
 
-    const { text, toolCalls } = parseSSEChunk(chunk)
-    if (text) {
-      collectedText += text
-    }
-    if (toolCalls.size > 0) {
-      collectedToolCalls = new Map([...collectedToolCalls, ...toolCalls])
-    }
+  const resourceLoader = {
+    getExtensions: () => ({
+      extensions: [],
+      errors: [],
+      runtime: piSdk.createExtensionRuntime(),
+    }),
+    getSkills: () => ({ skills: [], diagnostics: [] }),
+    getPrompts: () => ({ prompts: [], diagnostics: [] }),
+    getThemes: () => ({ themes: [], diagnostics: [] }),
+    getAgentsFiles: () => ({ agentsFiles: [] }),
+    getSystemPrompt: () => systemMsg,
+    getAppendSystemPrompt: () => [],
+    extendResources: () => {},
+    reload: async () => {},
+  } as any;
 
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
-        write(trimmed + '\n\n')
-      }
-    }
+  const { session } = await createAgentSession({
+    cwd: process.cwd(),
+    model,
+    authStorage,
+    modelRegistry,
+    tools: piToolsList,
+    customTools,
+    sessionManager: SessionManager.inMemory(process.cwd()),
+    settingsManager,
+    resourceLoader,
+  });
+
+  if (signal.aborted) {
+    session.dispose();
+    return;
   }
 
-  if (collectedToolCalls.size > 0) {
-    const toolResults = await executeToolCalls(collectedToolCalls, registry)
+  const abortHandler = () => {
+    session.abort().catch(() => {});
+  };
+  signal.addEventListener("abort", abortHandler);
 
-    const messagesWithTools = [
-      ...messages,
-      { role: 'assistant' as const, content: collectedText || null },
-      ...toolResults,
-    ]
+  try {
+    session.subscribe((event) => {
+      if (signal.aborted) return;
 
-    const { stream: resultStream } = await callRouterLLM(config, messagesWithTools as any, tools)
-    if (!resultStream) return
-
-    const resultReader = resultStream.getReader()
-    const resultDecoder = new TextDecoder()
-    let resultBuffer = ''
-
-    while (true) {
-      const { done, value } = await resultReader.read()
-      if (done) break
-      resultBuffer += resultDecoder.decode(value, { stream: true })
-      const lines = resultBuffer.split('\n')
-      resultBuffer = lines.pop() || ''
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
-          write(trimmed + '\n\n')
-        }
+      if (
+        event.type === "message_update" &&
+        event.assistantMessageEvent.type === "text_delta"
+      ) {
+        adapter.handleEvent({
+          type: "text",
+          data: { text: event.assistantMessageEvent.delta },
+        });
+      } else if (event.type === "tool_execution_start") {
+        adapter.handleEvent({
+          type: "tool_call",
+          data: { tool_name: event.toolName, input: event.args },
+        });
+      } else if (event.type === "tool_execution_end") {
+        const textContent =
+          event.result?.content?.map((c: any) => c.text || "").join("\n") || "";
+        adapter.handleEvent({
+          type: "tool_result",
+          data: { tool_name: event.toolName, output: textContent },
+        });
       }
-    }
+    });
+
+    const history = messages.slice(0, -1);
+    const lastMessage = messages[messages.length - 1]?.content || "";
+
+    const formattedHistory: any[] = history.map((m) => {
+      if (m.role === "tool") {
+        return {
+          role: "tool",
+          content: m.content,
+          tool_call_id: m.tool_call_id || "unknown",
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content,
+      };
+    });
+
+    session.state.messages = formattedHistory;
+
+    await session.prompt(lastMessage);
+  } finally {
+    signal.removeEventListener("abort", abortHandler);
+    session.dispose();
   }
 }
 
@@ -118,55 +230,105 @@ export function createChatRouter(
   pool: UserSessionPool,
   config: Config,
 ): Router {
-  const router = Router()
+  const router = Router();
 
-  router.post('/chat/stream', async (req: Request, res: Response) => {
-    const userId = (req as any).userId
+  router.post("/chat/stream", async (req: Request, res: Response) => {
+    const userId = (req as any).userId;
 
     try {
-      checkRateLimit(userId)
+      checkRateLimit(userId);
     } catch {
-      res.status(429).json({ error: 'Rate limit exceeded. Try again later.' })
-      return
+      res.status(429).json({ error: "Rate limit exceeded. Try again later." });
+      return;
     }
 
-    let chatId: string
-    let message: string
+    let chatId: string;
+    let message: string;
+    const systemPrompt = req.body.systemPrompt;
+    const projectId: string | null = req.body.projectId || null;
+    const enabledExtensions: string[] = Array.isArray(
+      req.body.enabledExtensions,
+    )
+      ? (req.body.enabledExtensions as any[]).filter(
+          (x): x is string =>
+            typeof x === "string" && x.length > 0 && x.length < 100,
+        )
+      : [];
     try {
-      chatId = validateChatId(req.body.chatId)
-      message = validateMessage(req.body.message)
+      chatId = validateChatId(req.body.chatId);
+      message = validateMessage(req.body.message);
     } catch (err) {
-      res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid request' })
-      return
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Invalid request",
+      });
+      return;
     }
 
-    res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-cache')
-    res.setHeader('Connection', 'keep-alive')
-    res.setHeader('X-Accel-Buffering', 'no')
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
 
-    const write = (chunk: string) => res.write(chunk)
-    const end = () => res.end()
-    const adapter = new SdkSseAdapter(write, end, chatId)
+    const write = (chunk: string) => res.write(chunk);
+    const end = () => res.end();
+    const adapter = new SdkSseAdapter(write, end, chatId);
+
+    const controller = new AbortController();
+    if (typeof req.on === "function") {
+      req.on("close", () => {
+        controller.abort();
+      });
+    }
 
     try {
       await pool.getOrCreate(userId, {
         routerUrl: config.router.url,
         routerApiKey: config.router.apiKey,
         model: config.router.model,
-      })
+      });
 
-      const registry = new ExtensionRegistry({ extensionsPath: config.extensionsPath || 'extensions' })
-      const messages = [{ role: 'user', content: message }]
+      const registry = ExtensionRegistry.getInstance({
+        extensionsPath: config.extensionsPath || "extensions",
+      });
+      const systemMessage = systemPrompt || config.defaultSystemPrompt;
+      let messages: ChatMessage[];
+      if (
+        req.body.messages &&
+        Array.isArray(req.body.messages) &&
+        req.body.messages.length > 0
+      ) {
+        messages = req.body.messages;
+        const hasSystem = messages.some((m) => m.role === "system");
+        if (!hasSystem && systemMessage) {
+          messages.unshift({ role: "system", content: systemMessage });
+        }
+      } else {
+        messages = systemMessage
+          ? [
+              { role: "system", content: systemMessage },
+              { role: "user", content: message },
+            ]
+          : [{ role: "user", content: message }];
+      }
 
-      adapter.handleEvent({ type: 'start', data: { chatId } })
-      await doStreamingCall(config, messages, registry, write)
-      adapter.handleEvent({ type: 'finish', data: { finish_reason: 'stop' } })
+      adapter.handleEvent({ type: "start", data: { chatId } });
+      await doStreamingCall(
+        config,
+        messages,
+        registry,
+        adapter,
+        userId,
+        controller.signal,
+        projectId,
+        enabledExtensions,
+      );
+      adapter.handleEvent({ type: "finish", data: { finish_reason: "stop" } });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      adapter.handleEvent({ type: 'error', data: { message: errorMessage } })
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      adapter.handleEvent({ type: "error", data: { message: errorMessage } });
     }
-  })
+  });
 
-  return router
+  return router;
 }

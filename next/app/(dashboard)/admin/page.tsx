@@ -1,80 +1,136 @@
 'use client'
 
-import { useState } from 'react'
-import { Puzzle, CheckCircle, XCircle, Clock, Plus, Filter } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Puzzle, CheckCircle, XCircle, Clock, Plus, Filter, Loader2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
-// Placeholder data
-const initialRequests = [
-  {
-    id: '1',
-    title: 'GitHub Integration',
-    description: 'Connect with GitHub repos',
-    status: 'pending',
-    priority: 'high',
-    date: '2026-01-10',
-  },
-  {
-    id: '2',
-    title: 'Slack Bot',
-    description: 'Post summaries to Slack',
-    status: 'approved',
-    priority: 'medium',
-    date: '2026-01-08',
-  },
-  {
-    id: '3',
-    title: 'Weather Tool',
-    description: 'Get weather data',
-    status: 'rejected',
-    priority: 'low',
-    date: '2026-01-05',
-  },
-]
-
-type Request = typeof initialRequests[number]
+// Mock API response structure matching the database schema
+type ExtensionRequest = {
+  id: string
+  userId: string
+  title: string
+  description: string
+  priority: 'high' | 'medium' | 'low'
+  status: 'pending' | 'approved' | 'rejected'
+  adminNotes?: string
+  createdAt: string
+  updatedAt: string
+}
 
 type Tab = 'All' | 'Pending' | 'Approved' | 'Rejected'
 
 export default function AdminExtensionRequests() {
-  const [requests, setRequests] = useState<Request[]>(initialRequests)
+  const [requests, setRequests] = useState<ExtensionRequest[]>([])
   const [activeTab, setActiveTab] = useState<Tab>('All')
   const [showForm, setShowForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [newPriority, setNewPriority] = useState<'high' | 'medium' | 'low'>('medium')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState<Record<string, boolean>>({})
+
+  const fetchRequests = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const res = await fetch('/api/admin/extension-requests', { credentials: 'include' })
+      if (!res.ok) throw new Error('Failed to load requests')
+      const data = (await res.json()) as ExtensionRequest[]
+      setRequests(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchRequests()
+  }, [fetchRequests])
 
   const filtered = requests.filter((r) => {
     if (activeTab !== 'All' && r.status !== activeTab.toLowerCase()) return false
     return true
   })
 
-  const handleApprove = (id: string) => {
-    setRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'approved' } : r))
-    )
-  }
-  const handleReject = (id: string) => {
-    setRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'rejected' } : r))
-    )
+  async function handleApprove(id: string) {
+    try {
+      setUpdatingStatus((prev) => ({ ...prev, [id]: true }))
+      setError(null)
+      const res = await fetch('/api/admin/extension-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ id, status: 'approved' }),
+      })
+      if (!res.ok) throw new Error('Failed to update request')
+      const updated = (await res.json()) as ExtensionRequest
+      setRequests((prev) => prev.map((r) => (r.id === id ? updated : r)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve')
+    } finally {
+      setUpdatingStatus((prev) => ({ ...prev, [id]: false }))
+    }
   }
 
-  const handleAddRequest = (e: React.FormEvent) => {
-    e.preventDefault()
-    const newReq: Request = {
-      id: `${Date.now()}`,
-      title: newTitle,
-      description: newDescription,
-      status: 'pending',
-      priority: newPriority,
-      date: new Date().toISOString().split('T')[0],
+  async function handleReject(id: string) {
+    try {
+      setUpdatingStatus((prev) => ({ ...prev, [id]: true }))
+      setError(null)
+      const res = await fetch('/api/admin/extension-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ id, status: 'rejected' }),
+      })
+      if (!res.ok) throw new Error('Failed to update request')
+      const updated = (await res.json()) as ExtensionRequest
+      setRequests((prev) => prev.map((r) => (r.id === id ? updated : r)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject')
+    } finally {
+      setUpdatingStatus((prev) => ({ ...prev, [id]: false }))
     }
-    setRequests((prev) => [newReq, ...prev])
-    setNewTitle('')
-    setNewDescription('')
-    setNewPriority('medium')
-    setShowForm(false)
+  }
+
+    async function handleAddRequest(e: React.FormEvent) {
+      e.preventDefault()
+      try {
+        setCreating(true)
+        setError(null)
+        // Mock creation — API doesn't support create yet
+        const created: ExtensionRequest = {
+          id: `${Date.now()}`,
+          userId: 'current-user',
+          title: newTitle,
+          description: newDescription,
+          status: 'pending',
+          priority: newPriority,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+        setRequests((prev) => [created, ...prev])
+        setNewTitle('')
+        setNewDescription('')
+        setNewPriority('medium')
+        setShowForm(false)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to create request')
+      } finally {
+        setCreating(false)
+      }
+    }
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      </div>
+    )
   }
 
   return (
@@ -95,6 +151,23 @@ export default function AdminExtensionRequests() {
           <Plus className="h-4 w-4" /> New request
         </button>
       </header>
+
+      {/* Error banner */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+          <span className="text-sm text-red-700 dark:text-red-300 flex-1">
+            {error}
+          </span>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-500 hover:text-red-700 dark:hover:text-red-300"
+            aria-label="Dismiss error"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* New request form */}
       {showForm && (
@@ -143,12 +216,15 @@ export default function AdminExtensionRequests() {
           <div className="flex justify-end">
             <button
               type="submit"
+              disabled={creating}
               className={cn(
                 'flex items-center gap-1.5 px-4 py-2 rounded-md',
                 'bg-green-600 text-white hover:bg-green-700',
-                'focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2'
+                'focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
             >
+              {creating && <Loader2 className="w-4 h-4 animate-spin" />}
               Add request
             </button>
           </div>
@@ -220,7 +296,7 @@ export default function AdminExtensionRequests() {
                     {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
                   </span>
                   <Clock className="h-4 w-4 text-gray-400" />
-                  <span className="text-gray-500">{req.date}</span>
+                  <span className="text-gray-500">{new Date(req.createdAt).toLocaleDateString()}</span>
                 </div>
               </div>
               <div className="flex space-x-2 mt-2 md:mt-0">
@@ -228,15 +304,27 @@ export default function AdminExtensionRequests() {
                   <>
                     <button
                       onClick={() => handleApprove(req.id)}
-                      className="flex items-center gap-1 px-3 py-1 rounded-md bg-green-600 text-white hover:bg-green-700"
+                      disabled={updatingStatus[req.id]}
+                      className="flex items-center gap-1 px-3 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <CheckCircle className="h-4 w-4" /> Approve
+                      {updatingStatus[req.id] ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4" />
+                      )}
+                      Approve
                     </button>
                     <button
                       onClick={() => handleReject(req.id)}
-                      className="flex items-center gap-1 px-3 py-1 rounded-md bg-red-600 text-white hover:bg-red-700"
+                      disabled={updatingStatus[req.id]}
+                      className="flex items-center gap-1 px-3 py-1 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <XCircle className="h-4 w-4" /> Reject
+                      {updatingStatus[req.id] ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <XCircle className="h-4 w-4" />
+                      )}
+                      Reject
                     </button>
                   </>
                 )}
