@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db } from './db'
 import { eq, desc } from 'drizzle-orm'
 import {
   users,
@@ -72,6 +72,10 @@ export const sessionStore = {
     return db.select().from(sessions).where(eq(sessions.projectId, projectId))
   },
 
+  async findByUserId(userId: string) {
+    return db.select().from(sessions).where(eq(sessions.userId, userId))
+  },
+
   async create(data: { id: string; userId: string; projectId: string; title?: string }) {
     const result = await db.insert(sessions).values({
       id: data.id,
@@ -85,6 +89,10 @@ export const sessionStore = {
   async update(id: string, data: { title?: string }) {
     const result = await db.update(sessions).set(data).where(eq(sessions.id, id)).returning()
     return result[0] || null
+  },
+
+  async delete(id: string) {
+    await db.delete(sessions).where(eq(sessions.id, id))
   },
 }
 
